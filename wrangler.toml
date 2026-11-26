@@ -8,6 +8,8 @@ compatibility_date = "2026-11-01"
 SUPABASE_URL = ""
 SUPABASE_ANON_KEY = ""
 FILES_PUBLIC_BASE_URL = ""
+NEXT_PUBLIC_SUPABASE_URL = "https://dvxnbpnjhkdommmhkwvr.supabase.co"
+NEXT_PUBLIC_SUPABASE_ANON_KEY = "sb_publishable_oNhW1UZg9eFhVvcRUMDGQQ_-2Gr_14x"
 
 # R2 uploads: uncomment after creating the bucket (`wrangler r2 bucket create haqq-files`).
 # Without this binding /api/upload reports enabled=false and the admin UI hides
