@@ -1193,6 +1193,39 @@ export type Database = {
           },
         ]
       }
+      level_resources: {
+        Row: {
+          level_id: string
+          resource_id: string
+          sort_order: number
+        }
+        Insert: {
+          level_id: string
+          resource_id: string
+          sort_order?: number
+        }
+        Update: {
+          level_id?: string
+          resource_id?: string
+          sort_order?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "level_resources_level_id_fkey"
+            columns: ["level_id"]
+            isOneToOne: false
+            referencedRelation: "levels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "level_resources_resource_id_fkey"
+            columns: ["resource_id"]
+            isOneToOne: false
+            referencedRelation: "resources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       levels: {
         Row: {
           code: string
@@ -2103,6 +2136,15 @@ export type Database = {
         Returns: undefined
       }
       on_attempt_graded: { Args: { p_attempt: string }; Returns: undefined }
+      publish_content: {
+        Args: {
+          p_comment?: string
+          p_entity: string
+          p_id: string
+          p_to?: Database["public"]["Enums"]["content_status"]
+        }
+        Returns: Database["public"]["Enums"]["content_status"]
+      }
       publish_exam: { Args: { p_exam: string }; Returns: number }
       purge_expired_guest_data: { Args: { p_batch?: number }; Returns: number }
       release_results: { Args: { p_exam: string }; Returns: undefined }

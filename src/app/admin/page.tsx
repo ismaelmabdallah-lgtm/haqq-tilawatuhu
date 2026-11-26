@@ -4,59 +4,66 @@ import { useEffect, useState } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
 import { RebuildButton } from "@/components/admin/RebuildButton";
 import { can } from "@/lib/auth";
-import { REVIEWABLE } from "@/lib/admin/entities";
 import { table } from "@/lib/admin/db";
-import { getBrowserClient } from "@/lib/supabase/client";
 import { arDigits } from "@/lib/quran/ref";
 
-type Counts = { review: number; changes: number; grading: number | null };
+type Count = { draft: number; published: number };
+const SECTIONS = [
+  { key: "resources", href: "/admin/content/?entity=resources", newHref: "/admin/content/edit/?entity=resources", title: "الملفات والملخصات", hint: "ارفع ملخص PDF أو تسجيلًا صوتيًا وأرفقه بمستوى" },
+  { key: "lessons", href: "/admin/content/?entity=lessons", newHref: "/admin/content/edit/?entity=lessons", title: "الدروس", hint: "أضف الدروس تدريجيًا: شرح قصير وصور ومقاطع صوتية" },
+  { key: "question_versions", href: "/admin/questions/", newHref: "/admin/questions/edit/", title: "بنك الأسئلة والاختبارات", hint: "أسئلة تُصحَّح آليًا ثم اجمعها في اختبار" },
+  { key: "announcements", href: "/admin/content/?entity=announcements", newHref: "/admin/content/edit/?entity=announcements", title: "الإعلانات", hint: "تظهر فورًا في الصفحة الرئيسية" },
+] as const;
 
 export default function AdminHome() {
-  const { roles, userId } = useAdmin();
-  const [counts, setCounts] = useState<Counts | null>(null);
+  const { roles } = useAdmin();
+  const [counts, setCounts] = useState<Record<string, Count>>({});
 
   useEffect(() => {
     let alive = true;
     (async () => {
-      let review = 0, changes = 0;
-      if (can.contentStaff(roles)) {
-        const lists = await Promise.all(REVIEWABLE.map((r) => table(r.entity).select("status,created_by").in("status", ["submitted", "under_review", "changes_requested"])));
-        for (const l of lists) for (const row of l.data ?? []) {
-          if (row.status === "changes_requested") { if (row.created_by === userId) changes++; } else review++;
+      const out: Record<string, Count> = {};
+      for (const s of SECTIONS) {
+        if (s.key === "announcements") {
+          const { data } = await table(s.key).select("id");
+          out[s.key] = { draft: 0, published: (data ?? []).length };
+        } else {
+          const { data } = await table(s.key).select("status");
+          const rows = data ?? [];
+          out[s.key] = { draft: rows.filter((r) => r.status !== "published" && r.status !== "archived").length, published: rows.filter((r) => r.status === "published").length };
         }
       }
-      const grading = can.grade(roles) ? ((await getBrowserClient().rpc("list_grading_queue", { p_limit: 200 })).data ?? []).length : null;
-      if (alive) setCounts({ review, changes, grading });
+      if (alive) setCounts(out);
     })();
     return () => { alive = false; };
-  }, [roles, userId]);
-
-  const card = (href: string, title: string, value: string | null, note: string) => (
-    <Link href={href} className="block rounded-xl border border-line bg-white p-4 hover:border-brand-500">
-      <p className="text-sm text-muted">{title}</p>
-      <p className="text-3xl font-bold text-brand-900">{value ?? "…"}</p>
-      <p className="text-xs text-muted">{note}</p>
-    </Link>
-  );
+  }, []);
 
   return (
     <div data-admin-home>
-      <h1 className="mb-4 text-2xl font-bold text-brand-900">لوحة فريق المنصة</h1>
-      <div className="grid gap-3 sm:grid-cols-3">
-        {can.review(roles) && card("/admin/review/", "بانتظار المراجعة العلمية", counts ? arDigits(counts.review) : null, "مرسل أو قيد المراجعة")}
-        {can.contentStaff(roles) && card("/admin/review/?mine=1", "مطلوب منك تعديله", counts ? arDigits(counts.changes) : null, "محتوى كتبته وطُلبت عليه تعديلات")}
-        {can.grade(roles) && card("/admin/grading/", "إجابات بانتظار التصحيح", counts?.grading != null ? arDigits(counts.grading) : null, "مقالية وصوتية")}
+      <h1 className="mb-1 text-2xl font-bold text-brand-900">لوحة الإدارة</h1>
+      <p className="mb-5 text-muted">{can.superAdmin(roles) ? "تنشر بضغطة واحدة، ويظهر المحتوى للزوار فورًا دون إعادة بناء الموقع." : "أنشئ المحتوى وأرسله للمراجعة."}</p>
+      <div className="grid gap-3 sm:grid-cols-2">
+        {SECTIONS.map((s) => {
+          const c = counts[s.key];
+          return (
+            <div key={s.key} className="flex flex-col rounded-2xl border border-line bg-white p-4">
+              <Link href={s.href} className="text-lg font-bold text-brand-900 hover:underline">{s.title}</Link>
+              <p className="text-sm text-muted">{s.hint}</p>
+              <p className="mt-2 text-sm">
+                {c ? <>{arDigits(c.published)} منشور{s.key !== "announcements" && <> · {arDigits(c.draft)} مسودة</>}</> : <span className="skeleton inline-block h-4 w-24 align-middle" />}
+              </p>
+              <Link href={s.newHref} className="tap mt-3 inline-flex items-center justify-center rounded-xl bg-brand-700 px-4 font-bold text-white sm:w-fit">+ إضافة</Link>
+            </div>
+          );
+        })}
       </div>
-      <section className="mt-6 rounded-xl border border-line bg-white p-4 text-sm">
-        <h2 className="mb-2 font-bold">مبادئ العمل</h2>
-        <ul className="list-disc space-y-1 ps-5 text-muted">
-          <li>لا يُنشر أي محتوى إلا بعد اعتماده من مراجع علمي غير كاتبه، ثم نشره من مدير المراجعة.</li>
-          <li>النص القرآني لا يُكتب يدويًا: الأمثلة تُحفظ بالإحالة (السورة:الآية) وتُعرض من نص تنزيل الموثق.</li>
-          <li>المحتوى المنقول من المنهج يجب أن يحمل رقم الصفحة.</li>
-          <li>مفاتيح الإجابات لا تصل إلى المتعلمين؛ تبقى في قاعدة البيانات.</li>
-        </ul>
-      </section>
-      {can.publish(roles) && <section className="mt-4"><RebuildButton /></section>}
+      {can.publish(roles) && (
+        <details className="mt-6 rounded-2xl border border-line bg-white p-4 text-sm">
+          <summary className="cursor-pointer font-bold">تحديث الصفحات المسبقة (اختياري)</summary>
+          <p className="my-2 text-muted">المحتوى المنشور يظهر للزوار فورًا. إعادة البناء تحدّث فقط النسخ المُعدّة مسبقًا لمحركات البحث.</p>
+          <RebuildButton />
+        </details>
+      )}
     </div>
   );
 }

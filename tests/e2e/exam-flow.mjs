@@ -9,16 +9,15 @@ import { chromium } from "playwright";
 import assert from "node:assert/strict";
 import { waitForSite } from "./warmup.mjs";
 import { readFileSync } from "node:fs";
-import { createApi } from "./pglite-api.mjs";
+import { sql } from "./sql.mjs";
 import { EXAMS } from "../fixtures/exam-fixture.mjs";
 
-const BASE = process.env.BASE_URL ?? "http://localhost:8788";
+const BASE = process.env.BASE_URL ?? "http://localhost:8799";
 await waitForSite(BASE);
 const exam = Object.fromEntries(EXAMS.map((e) => [e.key, e]));
 const raw = readFileSync("vendor/tanzil/quran-uthmani.txt", "utf8");
 const ayah = (s, a) => raw.split("\n").find((l) => l.startsWith(`${s}|${a}|`)).replace(/\r$/, "").split("|").slice(2).join("|");
 
-const api = await createApi();
 const browser = await chromium.launch();
 const errors = [];
 const leaked = [];
@@ -27,11 +26,6 @@ async function newPage({ clock = false } = {}) {
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, locale: "ar" });
   const page = await ctx.newPage();
   if (clock) await page.clock.install();
-  await page.route(/\/rest\/v1\//, async (route) => {
-    if (route.request().method() === "OPTIONS") return route.fulfill({ status: 204, headers: { "access-control-allow-origin": "*", "access-control-allow-headers": "*", "access-control-allow-methods": "*" } });
-    return api.handle(route);
-  });
-  await page.route(/\/auth\/v1\//, (route) => route.fulfill({ status: 401, contentType: "application/json", body: "{}" }));
   page.on("pageerror", (e) => errors.push(`${page.url()}: ${e.message}`));
   // Before submission nothing the browser receives may contain answer keys.
   page.on("response", async (res) => {
@@ -142,7 +136,7 @@ let practiceAttempt = "";
   await check("the result reopens from the same link after refresh", async () => {
     await page.reload({ waitUntil: "load" });
     await page.locator("[data-result=graded]").waitFor();
-    const n = await api.query("select status, total_score from public.exam_attempts where id = $1", [practiceAttempt]);
+    const n = { rows: await sql("select status, total_score from public.exam_attempts where id = $1", [practiceAttempt]) };
     assert.equal(n.rows[0].status, "graded");
     assert.equal(Number(n.rows[0].total_score), 14);
   });
@@ -173,7 +167,7 @@ async function q2Badge(page) { return page.locator("[data-result-item]").nth(1).
     await page.locator("[data-result=pending]").waitFor({ timeout: 15_000 });
     const t = await page.locator("main").innerText();
     assert.ok(t.includes("بانتظار التصحيح اليدوي") && t.includes("قيد التصحيح"));
-    const r = await api.query("select status from public.exam_attempts where id = $1", [attempt]);
+    const r = { rows: await sql("select status from public.exam_attempts where id = $1", [attempt]) };
     assert.equal(r.rows[0].status, "submitted");
   });
 
@@ -194,7 +188,7 @@ await check("when the timer reaches zero the attempt is submitted automatically"
   await q(page, 2).locator("textarea").fill("إجابة.");
   await page.clock.fastForward("05:05");
   await page.locator("[data-result]").waitFor({ timeout: 15_000 });
-  const r = await api.query("select status from public.exam_attempts where id = $1", [attempt]);
+  const r = { rows: await sql("select status from public.exam_attempts where id = $1", [attempt]) };
   assert.notEqual(r.rows[0].status, "in_progress");
   await page.context().close();
 });
@@ -219,6 +213,5 @@ await check("exam list shows the published test exams (live query)", async () =>
 
 await check("no uncaught page errors", async () => assert.deepEqual(errors, []));
 await browser.close();
-await api.close();
 console.log(failed ? `\n${failed} check(s) failed` : "\nall checks passed");
 process.exit(failed ? 1 : 0);

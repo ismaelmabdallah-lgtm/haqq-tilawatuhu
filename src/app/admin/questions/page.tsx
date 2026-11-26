@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { StatusBadge } from "@/components/admin/WorkflowPanel";
+import { QUESTION_TABS, SubTabs } from "@/components/admin/SubTabs";
 import type { ContentStatus } from "@/lib/admin/entities";
 import { table } from "@/lib/admin/db";
 import { useLookup } from "@/lib/admin/lookups";
@@ -31,6 +32,7 @@ export default function QuestionsPage() {
   const shown = (rows ?? []).filter(({ q, latest }) => !filter || q.lesson_id === filter || (filter === "none" && !q.lesson_id) || (latest?.prompt.stem ?? "").includes(filter));
   return (
     <div data-question-bank>
+      <SubTabs tabs={QUESTION_TABS} active="questions" />
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-2xl font-bold text-brand-900">بنك الأسئلة</h1>
         <Link href="/admin/questions/edit/" className="tap inline-flex items-center rounded-lg bg-brand-700 px-4 text-white">+ سؤال جديد</Link>

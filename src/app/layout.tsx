@@ -10,10 +10,11 @@ const quran = Amiri_Quran({ subsets: ["arabic"], weight: "400", variable: "--fon
 export const metadata: Metadata = {
   title: { default: "حَقَّ تِلَاوَتِهِ — منصة تعليم أحكام التلاوة والتجويد", template: "%s — حَقَّ تِلَاوَتِهِ" },
   description: "رحلتك نحو إتقان تلاوة القرآن الكريم: منصة مجانية مفتوحة لتعلّم أحكام التلاوة والتجويد، دون تسجيل ودون رسوم.",
-  applicationName: "حَقَّ تِلَاوَتِهِ",
+  applicationName: "حق تلاوته",
+  icons: { icon: [{ url: "/icon.svg", type: "image/svg+xml" }], apple: "/icon.svg" },
 };
 
-export const viewport: Viewport = { themeColor: "#1b5440", width: "device-width", initialScale: 1 };
+export const viewport: Viewport = { themeColor: "#14532d", width: "device-width", initialScale: 1 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

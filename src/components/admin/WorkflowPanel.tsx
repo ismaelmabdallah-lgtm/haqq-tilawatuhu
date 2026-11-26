@@ -1,12 +1,12 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
-import { RebuildButton } from "@/components/admin/RebuildButton";
 import { STATUS_LABEL, type ContentStatus } from "@/lib/admin/entities";
 import { allowedTransitions } from "@/lib/admin/workflow";
 import { table } from "@/lib/admin/db";
 import { errorMessage } from "@/lib/errors";
 import { getBrowserClient } from "@/lib/supabase/client";
+import { can } from "@/lib/auth";
 
 type Event = { id: number; from_status: ContentStatus | null; to_status: ContentStatus; actor_id: string | null; comment: string | null; occurred_at: string };
 type Comment = { id: number; author_id: string; body: string; field_path: string | null; resolved: boolean; created_at: string };
@@ -69,18 +69,46 @@ export function WorkflowPanel({ entity, id, status, authorId, onChanged }: {
     setMsg(error ? { ok: false, text: errorMessage(error) } : { ok: true, text: "تم تعيين المراجع." });
   }
 
+  /** Super admin: one-step publish/archive/draft via publish_content() (migration 0006). */
+  async function direct(to: ContentStatus) {
+    setBusy(true); setMsg(null);
+    const { error } = await getBrowserClient().rpc("publish_content", { p_entity: entity, p_id: id, p_to: to });
+    setBusy(false);
+    if (error) { setMsg({ ok: false, text: errorMessage(error) }); return; }
+    setMsg({ ok: true, text: to === "published" ? "نُشر — يظهر للزوار فورًا دون إعادة بناء." : `تم: ${STATUS_LABEL[to]}` });
+    onChanged();
+  }
+  const solo = can.superAdmin(roles);
+  const soloActions: { to: ContentStatus; label: string; tone: "primary" | "neutral" | "danger" }[] = !solo ? [] : [
+    ...(status !== "published" ? [{ to: "published" as const, label: status === "archived" ? "إعادة النشر" : "نشر الآن", tone: "primary" as const }] : []),
+    ...(status === "published" ? [{ to: "archived" as const, label: "أرشفة (إخفاء عن الزوار)", tone: "danger" as const }] : []),
+    ...(status !== "draft" ? [{ to: "draft" as const, label: "إعادة إلى مسودة للتعديل", tone: "neutral" as const }] : []),
+  ];
+
   const lastChangeRequest = events.find((e) => e.to_status === "changes_requested");
 
   return (
     <section className="rounded-xl border border-line bg-white p-4" data-workflow>
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-sm text-muted">الحالة:</span><StatusBadge status={status} />
-        {authorId === userId && <span className="text-xs text-muted">(أنت كاتب هذا المحتوى — لا يمكنك اعتماده بنفسك)</span>}
+        {authorId === userId && !solo && <span className="text-xs text-muted">(أنت كاتب هذا المحتوى — لا يمكنك اعتماده بنفسك)</span>}
       </div>
       {status === "changes_requested" && lastChangeRequest?.comment && (
         <p className="mt-2 rounded bg-red-50 p-2 text-sm text-danger"><b>ملاحظات المراجع: </b>{lastChangeRequest.comment}</p>
       )}
+      {solo && (
+        <div className="mt-3 flex flex-wrap gap-2" data-solo-actions>
+          {soloActions.map((a) => (
+            <button key={a.to} type="button" disabled={busy} onClick={() => void direct(a.to)} data-direct={a.to}
+              className={`tap rounded-xl px-5 font-bold disabled:opacity-50 ${a.tone === "primary" ? "bg-brand-700 text-white" : a.tone === "danger" ? "border border-danger text-danger" : "border border-line"}`}>
+              {a.label}
+            </button>
+          ))}
+        </div>
+      )}
       {transitions.length > 0 && (
+        <details className="mt-3" open={!solo}>
+          <summary className={solo ? "cursor-pointer text-sm text-muted" : "sr-only"}>مسار المراجعة العلمية بفريق (اختياري)</summary>
         <div className="mt-3">
           {transitions.some((t) => t.needsComment) && (
             <textarea value={comment} onChange={(e) => setComment(e.target.value)} rows={2} placeholder="ملاحظة (مطلوبة عند طلب التعديلات)"
@@ -95,9 +123,9 @@ export function WorkflowPanel({ entity, id, status, authorId, onChanged }: {
             ))}
           </div>
         </div>
+        </details>
       )}
       {msg && <p role="status" className={`mt-2 text-sm ${msg.ok ? "text-ok" : "text-danger"}`}>{msg.text}</p>}
-      {status === "published" && <div className="mt-3"><RebuildButton /></div>}
 
       {roles.some((r) => r === "super_admin" || r === "scientific_review_admin") && (status === "submitted" || status === "under_review") && (
         <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">

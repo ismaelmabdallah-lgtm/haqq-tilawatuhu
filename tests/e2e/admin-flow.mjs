@@ -8,14 +8,13 @@
 import { chromium } from "playwright";
 import assert from "node:assert/strict";
 import { waitForSite } from "./warmup.mjs";
-import { createApi } from "./pglite-api.mjs";
-import { sessionFor, TEST_USERS, usersSql } from "./session.mjs";
+import { sql } from "./sql.mjs";
+import { sessionFor, TEST_USERS } from "./session.mjs";
 import { EXAMS, SEED, examQuestionId } from "../fixtures/exam-fixture.mjs";
 
-const BASE = process.env.BASE_URL ?? "http://localhost:8788";
+const BASE = process.env.BASE_URL ?? "http://localhost:8799";
 await waitForSite(BASE, ["/", "/admin/", "/account/"]);
 const exam = Object.fromEntries(EXAMS.map((e) => [e.key, e]));
-const api = await createApi({ extraSql: [usersSql()] });
 const browser = await chromium.launch();
 const errors = [];
 
@@ -25,21 +24,17 @@ async function pageAs(user, { localStorage: ls = {} } = {}) {
   if (user) init["haqq-auth"] = JSON.stringify(sessionFor(user));
   await ctx.addInitScript((items) => { for (const [k, v] of Object.entries(items)) if (!localStorage.getItem(k)) localStorage.setItem(k, v); }, init);
   const page = await ctx.newPage();
-  await page.route(/\/rest\/v1\//, (route) => route.request().method() === "OPTIONS"
-    ? route.fulfill({ status: 204, headers: { "access-control-allow-origin": "*", "access-control-allow-headers": "*", "access-control-allow-methods": "*" } })
-    : api.handle(route));
-  await page.route(/\/auth\/v1\//, (route) => route.fulfill({ status: 200, contentType: "application/json", body: "{}" }));
   page.on("pageerror", (e) => errors.push(`${page.url()}: ${e.message}`));
   return page;
 }
 
 let failed = 0;
 async function check(name, fn) {
-  try { await fn(); console.log(`✔ ${name}`); } catch (e) { failed++; console.log(`✖ ${name}\n   ${e.message.split("\n")[0]}`); }
+  try { await fn(); console.log(`✔ ${name}`); } catch (e) { failed++; console.log(`✖ ${name}\n   ${process.env.DEBUG ? e.stack : e.message.split("\n")[0]}`); }
 }
-const go = (page, path) => page.goto(BASE + path, { waitUntil: "networkidle" });
+const go = (page, path) => page.goto(BASE + path, { waitUntil: "load" });
 const status = (page) => page.locator("[data-workflow] [data-status]").first().getAttribute("data-status");
-const dbStatus = async (tbl, id) => (await api.query(`select status, scientifically_verified as v from public.${tbl} where id = $1`, [id])).rows[0];
+const dbStatus = async (tbl, id) => (await sql(`select status, scientifically_verified as v from public.${tbl} where id = $1`, [id]))[0];
 async function selectWhenReady(page, sel, value) {
   await page.locator(`${sel} option[value="${value}"]`).waitFor({ state: "attached" });
   await page.selectOption(sel, value);
@@ -101,17 +96,20 @@ await check("review admin publishes; the lesson becomes public and scientificall
   await page.locator('[data-workflow] [data-status="published"]').waitFor();
   const r = await dbStatus("lessons", lessonId);
   assert.equal(r.status, "published"); assert.equal(r.v, true);
-  await page.getByText("إعادة بناء الموقع غير مُفعّلة").first().waitFor();   // /api/rebuild reports no deploy hook locally
+  const pub = await pageAs(null);
+  await go(pub, "/levels/l1/");
+  await pub.locator("[data-lesson-link=e2e-lesson]").waitFor({ timeout: 15_000 });   // live, no rebuild
+  await pub.context().close();
   assert.ok(await page.locator("#f-title").isDisabled(), "published content is frozen");
   await page.context().close();
 });
 
 // ------------------------------------------------------------------ resource: changes requested path + upload fallback
 let resourceId = "";
-await check("resources: R2 upload is disabled without a binding, YouTube resources still work", async () => {
+await check("resources: editors cannot upload files (super admin only) but YouTube resources still work", async () => {
   const page = await pageAs(TEST_USERS.editor);
   await go(page, "/admin/content/edit/?entity=resources");
-  await page.selectOption("#f-provider", "r2");
+  assert.equal(await page.inputValue("#f-provider"), "supabase", "upload is the default source");
   await page.locator("[data-upload-disabled]").waitFor();
   await page.selectOption("#f-kind", "video");
   await page.selectOption("#f-provider", "youtube");
@@ -137,7 +135,7 @@ await check("reviewer must explain a change request; the editor sees the comment
   await rev.locator('[data-workflow] [data-status="changes_requested"]').waitFor();
   const ed = await pageAs(TEST_USERS.editor);
   await go(ed, `/admin/content/edit/?entity=resources&id=${resourceId}`);
-  assert.ok((await ed.locator("[data-workflow]").innerText()).includes("يرجى توضيح العنوان."));
+  await ed.locator("[data-workflow]").getByText("يرجى توضيح العنوان.").first().waitFor();   // banner (+ history)
   assert.ok(await ed.locator("#f-title").isEnabled());
   await rev.context().close(); await ed.context().close();
 });
@@ -160,8 +158,8 @@ await check("question editor rejects answer data in the prompt and saves a valid
   await page.locator("[data-question-preview]").getByText("سؤال من الاختبار الآلي").waitFor();
   await page.locator("[data-save-version]").click();
   await page.getByText("تم الحفظ.").waitFor();
-  versionId = (await api.query("select id from public.question_versions where question_id = $1", [questionId])).rows[0].id;
-  const k = (await api.query("select key from public.question_keys where question_version_id = $1", [versionId])).rows[0];
+  versionId = (await sql("select id from public.question_versions where question_id = $1", [questionId]))[0].id;
+  const k = (await sql("select key from public.question_keys where question_version_id = $1", [versionId]))[0];
   assert.deepEqual(k.key, { p1: { correct: "b" } });
   await page.locator("[data-transition=submitted]").click();
   await page.locator('[data-workflow] [data-status="submitted"]').waitFor();
@@ -174,10 +172,11 @@ await check("reviewer sees the answer key during review; review admin publishes 
   await rev.locator(`[data-review-item="${versionId}"]`).click();
   await rev.locator("[data-review-key]").waitFor();
   await rev.locator("[data-review-detail] [data-transition=under_review]").click();
+  // the queue reloads after each transition: wait for the new status before reopening
+  await rev.locator(`[data-review-item="${versionId}"] [data-status="under_review"]`).waitFor();
   await rev.locator(`[data-review-item="${versionId}"]`).click();
   await rev.locator("[data-review-detail] [data-transition=approved]").click();
-  await rev.locator(`[data-review-item="${versionId}"]`).click();
-  await rev.locator('[data-review-detail] [data-status="approved"]').waitFor();
+  await rev.locator(`[data-review-item="${versionId}"] [data-status="approved"]`).waitFor();
   const ra = await pageAs(TEST_USERS.reviewAdmin);
   await go(ra, `/admin/questions/edit/?id=${questionId}`);
   await ra.locator("[data-version-editor] [data-transition=published]").click();
@@ -198,16 +197,16 @@ await check("exam builder: create, add the published question, publish", async (
   await page.locator("[data-exam-paper] li").first().waitFor();
   await page.locator("[data-publish-exam]").click();
   await page.locator('[data-exam-status="published"]').waitFor();
-  const r = (await api.query("select status, total_marks from public.exams where id = $1", [examId])).rows[0];
+  const r = (await sql("select status, total_marks from public.exams where id = $1", [examId]))[0];
   assert.equal(r.status, "published"); assert.equal(Number(r.total_marks), 2);
   await page.context().close();
 });
 
 // ------------------------------------------------------------------ grading
 await check("grader scores a pending essay; the attempt becomes graded", async () => {
-  const s = (await api.query("select public.start_attempt($1) as r", [exam.formal.id])).rows[0].r;
+  const s = (await sql("select public.start_attempt($1) as r", [exam.formal.id]))[0].r;
   const answers = { [examQuestionId("formal", "q1")]: { parts: { p1: { choice: "b" } } }, [examQuestionId("formal", "q11")]: { parts: { p1: { text: "إجابة مقالية للتصحيح" } } } };
-  await api.query("select public.submit_attempt($1, $2::jsonb, $3)", [s.attempt_id, JSON.stringify(answers), s.guest_token]);
+  await sql("select public.submit_attempt($1, $2::jsonb, $3)", [s.attempt_id, JSON.stringify(answers), s.guest_token]);
   const page = await pageAs(TEST_USERS.grader);
   await go(page, "/admin/grading/");
   const item = page.locator("[data-grade-item]", { hasText: "إجابة مقالية للتصحيح" });
@@ -215,7 +214,7 @@ await check("grader scores a pending essay; the attempt becomes graded", async (
   await item.locator("textarea").fill("أحسنت");
   await item.locator("[data-grade-submit]").click();
   await page.locator("[data-grade-item]", { hasText: "إجابة مقالية للتصحيح" }).waitFor({ state: "detached" });
-  const r = (await api.query("select status, total_score from public.exam_attempts where id = $1", [s.attempt_id])).rows[0];
+  const r = (await sql("select status, total_score from public.exam_attempts where id = $1", [s.attempt_id]))[0];
   assert.equal(r.status, "graded"); assert.equal(Number(r.total_score), 3.5);
   await page.context().close();
 });
@@ -228,9 +227,9 @@ await check("super admin grants a team role from the team page", async () => {
   await page.selectOption('[aria-label="الدور"]', "moderator");
   await page.getByRole("button", { name: "منح الدور" }).click();
   await page.locator("[data-team] td", { hasText: TEST_USERS.learner.id }).waitFor();
-  const r = await api.query("select role from public.platform_role_assignments where user_id = $1", [TEST_USERS.learner.id]);
+  const r = { rows: await sql("select role from public.platform_role_assignments where user_id = $1", [TEST_USERS.learner.id]) };
   assert.deepEqual(r.rows.map((x) => x.role), ["moderator"]);
-  await api.query("delete from public.platform_role_assignments where user_id = $1", [TEST_USERS.learner.id]);
+  await sql("delete from public.platform_role_assignments where user_id = $1", [TEST_USERS.learner.id]);
   await page.context().close();
 });
 
@@ -244,15 +243,15 @@ await check("editor publishes an announcement (no review needed)", async () => {
     const status = await page.locator("[data-entity-editor] [role=status]").allInnerTexts();
     throw new Error(`no redirect after save; url=${page.url()} status=${JSON.stringify(status)}`);
   });
-  const r = await api.query("select count(*)::int as n from public.announcements where title = 'إعلان من الاختبار الآلي'");
+  const r = { rows: await sql("select count(*)::int as n from public.announcements where title = 'إعلان من الاختبار الآلي'") };
   assert.equal(r.rows[0].n, 1);
   await page.context().close();
 });
 
 // ------------------------------------------------------------------ learner account
 await check("learner imports browser progress and claims a guest attempt into the account", async () => {
-  const s = (await api.query("select public.start_attempt($1) as r", [exam.formal.id])).rows[0].r;
-  await api.query("select public.submit_attempt($1, $2::jsonb, $3)", [s.attempt_id, JSON.stringify({ [examQuestionId("formal", "q1")]: { parts: { p1: { choice: "b" } } }, [examQuestionId("formal", "q11")]: { parts: { p1: { text: "x" } } } }), s.guest_token]);
+  const s = (await sql("select public.start_attempt($1) as r", [exam.formal.id]))[0].r;
+  await sql("select public.submit_attempt($1, $2::jsonb, $3)", [s.attempt_id, JSON.stringify({ [examQuestionId("formal", "q1")]: { parts: { p1: { choice: "b" } } }, [examQuestionId("formal", "q11")]: { parts: { p1: { text: "x" } } } }), s.guest_token]);
   const page = await pageAs(TEST_USERS.learner, { localStorage: {
     "haqq:progress:v1": JSON.stringify({ [lessonId]: { viewed_at: new Date().toISOString(), completed_at: new Date().toISOString() } }),
     "haqq:attempts:v1": JSON.stringify([{ attempt_id: s.attempt_id, exam_id: exam.formal.id, exam_title: "x", token: s.guest_token, started_at: new Date().toISOString(), finished: true }]),
@@ -262,9 +261,9 @@ await check("learner imports browser progress and claims a guest attempt into th
   await page.locator("[data-account] [role=status]").waitFor();
   const syncMsg = await page.locator("[data-account] [role=status]").innerText();
   assert.ok(syncMsg.includes("محاولة أُضيفت إلى حسابك"), syncMsg);
-  const a = (await api.query("select user_id from public.exam_attempts where id = $1", [s.attempt_id])).rows[0];
+  const a = (await sql("select user_id from public.exam_attempts where id = $1", [s.attempt_id]))[0];
   assert.equal(a.user_id, TEST_USERS.learner.id);
-  const p = (await api.query("select completed_at from public.lesson_progress where user_id = $1 and lesson_id = $2", [TEST_USERS.learner.id, lessonId])).rows[0];
+  const p = (await sql("select completed_at from public.lesson_progress where user_id = $1 and lesson_id = $2", [TEST_USERS.learner.id, lessonId]))[0];
   assert.ok(p?.completed_at, "completion imported");
   await page.locator("[data-attempt-history] li").first().waitFor();
   await page.context().close();
@@ -289,6 +288,120 @@ await check("account-only exam: learner submits, sees 'unreleased', then sees th
   await page.context().close(); await ed.context().close();
 });
 
+// ------------------------------------------------------------------ solo super admin (v1 workflow)
+const SB = process.env.SUPABASE_TEST_URL ?? "http://127.0.0.1:54329";
+const level1Id = (await sql("select md5('haqq:level:minhaj-al-darisin-ed2-2026:l1')::uuid as id"))[0].id;
+
+await check("super admin sees exactly 5 sidebar sections; grading is hidden", async () => {
+  const page = await pageAs(TEST_USERS.super);
+  await go(page, "/admin/");
+  await page.locator("[data-admin-home]").waitFor();
+  const items = (await page.locator('nav[aria-label="لوحة الفريق"] a').allInnerTexts()).map((t) => t.trim());
+  assert.deepEqual(items, ["الرئيسية", "الملفات والملخصات", "الدروس", "بنك الأسئلة والاختبارات", "الإعلانات", "الأكاديمية والفريق"]);
+  assert.equal(await page.locator('a[href="/admin/grading/"]').count(), 0);
+  await page.context().close();
+});
+
+let soloLesson = "";
+await check("super admin publishes a lesson in one click; it is public immediately (no rebuild)", async () => {
+  const page = await pageAs(TEST_USERS.super);
+  await go(page, "/admin/content/edit/?entity=lessons");
+  await selectWhenReady(page, "#f-chapter_id", SEED.chapterL1C2);
+  await page.fill("#f-code", "solo-lesson");
+  await page.fill("#f-sort_order", "60");
+  await page.fill("#f-title", "درس المدير المنفرد");
+  await page.selectOption("#f-origin", "supplementary_explanation");
+  await page.locator("[data-save]").click();
+  await page.waitForURL(/entity=lessons&id=/);
+  soloLesson = new URL(page.url()).searchParams.get("id");
+  await page.locator("[data-direct=published]").click();
+  await page.locator('[data-workflow] [data-status="published"]').waitFor();
+  const r = await dbStatus("lessons", soloLesson);
+  assert.equal(r.status, "published"); assert.equal(r.v, true, "direct publish counts as verified");
+  const pub = await pageAs(null);
+  await go(pub, "/levels/l1/");
+  await pub.locator("[data-lesson-link=solo-lesson]").waitFor({ timeout: 15_000 });
+  await page.locator("[data-direct=archived]").click();
+  await page.locator('[data-workflow] [data-status="archived"]').waitFor();
+  await pub.reload({ waitUntil: "load" });
+  await pub.locator("[data-lesson-link=zz-test-lesson]").waitFor();
+  assert.equal(await pub.locator("[data-lesson-link=solo-lesson]").count(), 0, "archived lesson hidden");
+  await page.context().close(); await pub.context().close();
+});
+
+let uploadedKey = "";
+await check("super admin uploads a PDF to Supabase Storage, attaches it to level 1 and publishes it", async () => {
+  const page = await pageAs(TEST_USERS.super);
+  await go(page, "/admin/content/edit/?entity=resources");
+  await page.locator("[data-upload-enabled]").waitFor();
+  await page.setInputFiles("[data-upload-input]", { name: "bad.txt", mimeType: "text/plain", buffer: Buffer.from("x") });
+  await page.getByText("نوع الملف غير مسموح").waitFor();
+  await page.setInputFiles("[data-upload-input]", { name: "summary.pdf", mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.4 test") });
+  await page.getByText(/تم الرفع/).waitFor();
+  uploadedKey = await page.inputValue("#f-object_key");
+  assert.match(uploadedKey, /^pdf\/\d{4}\/\d{2}\/[0-9a-f-]{36}\.pdf$/);
+  await page.fill("#f-title", "ملخص رفعه المدير");
+  await page.locator("[data-save]").click();
+  await page.waitForURL(/entity=resources&id=/);
+  await selectWhenReady(page, '[aria-label="إضافة إلى يظهر في صفحة المستوى"]', level1Id);
+  await page.locator('[data-links="level_resources"]').getByRole("button", { name: "إضافة" }).click();
+  await page.locator('[data-links="level_resources"] li', { hasText: "المستوى الأول" }).waitFor();
+  const anon = `${Buffer.from('{"alg":"none"}').toString("base64url")}.${Buffer.from('{"role":"anon"}').toString("base64url")}.x`;
+  const before = await fetch(`${SB}/storage/v1/object/sign/materials/${uploadedKey}`, { method: "POST", headers: { authorization: `Bearer ${anon}`, "content-type": "application/json" }, body: "{}" });
+  assert.equal(before.status, 400, "draft file not downloadable");
+  await page.locator("[data-direct=published]").click();
+  await page.locator('[data-workflow] [data-status="published"]').waitFor();
+  const pub = await pageAs(null);
+  await go(pub, "/levels/l1/");
+  const item = pub.locator("[data-resource]", { hasText: "ملخص رفعه المدير" });
+  await item.waitFor({ timeout: 15_000 });
+  await Promise.all([
+    pub.context().waitForEvent("request", (r) => r.url().includes(`/object/sign/materials/${uploadedKey}`) && r.method() === "GET"),
+    item.locator("[data-download]").click(),
+  ]);
+  await page.context().close(); await pub.context().close();
+});
+
+await check("storage refuses uploads from editors and guests at the server (not just in the UI)", async () => {
+  const ed = await pageAs(TEST_USERS.editor);
+  await go(ed, "/admin/content/edit/?entity=resources");
+  await ed.locator("[data-upload-disabled]").waitFor();
+  await ed.context().close();
+  const tok = (u) => u ? sessionFor(u).access_token : `${Buffer.from('{"alg":"none"}').toString("base64url")}.${Buffer.from('{"role":"anon"}').toString("base64url")}.x`;
+  for (const who of [TEST_USERS.editor, null]) {
+    const r = await fetch(`${SB}/storage/v1/object/materials/pdf/2026/11/hack.pdf`, { method: "POST", headers: { authorization: `Bearer ${tok(who)}`, "content-type": "application/pdf" }, body: "%PDF" });
+    assert.equal(r.status, 403, `${who?.email ?? "guest"} upload must be refused`);
+  }
+  const del = await fetch(`${SB}/storage/v1/object/materials`, { method: "DELETE", headers: { authorization: `Bearer ${tok(TEST_USERS.editor)}`, "content-type": "application/json" }, body: JSON.stringify({ prefixes: [uploadedKey] }) });
+  assert.deepEqual(await del.json(), [], "editor cannot delete");
+  assert.equal((await sql("select count(*)::int as n from storage.objects where name = $1", [uploadedKey]))[0].n, 1);
+});
+
+await check("question builder: essay/audio parts are rejected in v1; no essay template", async () => {
+  const page = await pageAs(TEST_USERS.super);
+  await go(page, "/admin/questions/edit/");
+  await page.locator("[data-save-scope]").click();
+  await page.waitForURL(/questions\/edit\/\?id=/);
+  await page.locator("[data-prompt-json]").waitFor();
+  assert.equal(await page.getByRole("button", { name: "سؤال مقالي" }).count(), 0);
+  for (const t of ["إكمال الفراغ", "سحب الكلمات وإفلاتها", "توصيل", "ترتيب", "إكمال جدول", "أحكام الراء (وصل/وقف/سبب)"]) {
+    assert.equal(await page.getByRole("button", { name: t }).count(), 1, `template ${t}`);
+  }
+  await page.fill("[data-prompt-json]", JSON.stringify({ stem: "اشرح", parts: [{ id: "e", type: "long_text", marks: 2 }] }));
+  await page.fill("[data-key-json]", "{}");
+  assert.ok((await page.locator("[data-validation-errors]").innerText()).includes("غير مفعّلة"));
+  await page.context().close();
+});
+
+await check("exam builder: a new formal exam defaults to account-only; practice stays open to guests", async () => {
+  const page = await pageAs(TEST_USERS.super);
+  await go(page, "/admin/exams/edit/");
+  assert.equal(await page.isChecked("#f-requires_account"), false);
+  await page.selectOption("#f-kind", "formal");
+  assert.equal(await page.isChecked("#f-requires_account"), true);
+  await page.context().close();
+});
+
 await check("auth forms render for guests (sign in / sign up / reset)", async () => {
   const page = await pageAs(null);
   await go(page, "/account/");
@@ -303,6 +416,5 @@ await check("auth forms render for guests (sign in / sign up / reset)", async ()
 
 await check("no uncaught page errors", async () => assert.deepEqual(errors, []));
 await browser.close();
-await api.close();
 console.log(failed ? `\n${failed} check(s) failed` : "\nall checks passed");
 process.exit(failed ? 1 : 0);

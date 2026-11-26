@@ -1,5 +1,4 @@
-import "server-only";
-import type { AcademyLetter, Site } from "./site";
+import type { AcademyLetter, Site } from "./model";
 
 export const letterHref = (l: AcademyLetter) => `/academy/letters/${l.sort_order}/`;
 export const pointHref = (code: string) => `/academy/points/${code}/`;

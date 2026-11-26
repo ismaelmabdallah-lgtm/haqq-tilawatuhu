@@ -47,7 +47,11 @@ async function ensure(src) {
     mkdirSync(vendorDir, { recursive: true });
     writeFileSync(path, Buffer.from(await res.arrayBuffer()));
   }
-  const buf = readFileSync(path);
+  // Hash with line endings normalized to LF: Tanzil's metadata file mixes CRLF/LF
+  // and Git (core.autocrlf) may rewrite them on checkout, which would otherwise
+  // make Windows and Linux (Cloudflare) builds disagree about identical content.
+  // The Quran text itself is LF-only, so its hash is unaffected.
+  const buf = Buffer.from(readFileSync(path).toString("utf8").replace(/\r\n/g, "\n"), "utf8");
   const got = sha256(buf);
   if (got !== src.sha256) {
     throw new Error(`[quran] CHECKSUM MISMATCH for ${src.file}\n  expected ${src.sha256}\n  got      ${got}\nRefusing to build with unverified Quranic text.`);

@@ -1,65 +1,49 @@
 "use client";
-import { useEffect, useState } from "react";
-import { callFunction } from "@/lib/admin/db";
+import { useState } from "react";
+import { useAdmin } from "@/components/admin/AdminShell";
+import { can } from "@/lib/auth";
 import { formatBytes } from "@/lib/files";
+import { getBrowserClient } from "@/lib/supabase/client";
+import { checkUpload, MAX_UPLOAD_BYTES, UPLOAD_TYPES, uploadPath, type UploadKind } from "@/lib/admin/upload-rules";
 
-type Status = { enabled: boolean; max_bytes: number } | null;
-export type Uploaded = { object_key: string; size_bytes: number; mime_type: string };
+export type Uploaded = { object_key: string; size_bytes: number; mime_type: string; kind: UploadKind };
 
 /**
- * Direct upload to Cloudflare R2 via /api/upload. When the Pages Function or
- * its R2 binding is not available (local dev, unconfigured project), only this
- * action is disabled — YouTube and external links keep working.
+ * Direct upload to Supabase Storage (bucket "materials"). Authorization is
+ * enforced by Storage RLS: only the super admin may insert/delete. Files stay
+ * private until a PUBLISHED resource points at them.
  */
 export function UploadWidget({ onUploaded, disabled }: { onUploaded: (u: Uploaded) => void; disabled?: boolean }) {
-  const [status, setStatus] = useState<Status>(null);
-  const [checked, setChecked] = useState(false);
+  const { roles } = useAdmin();
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
-  useEffect(() => {
-    let alive = true;
-    fetch("/api/upload")
-      .then((r) => (r.ok && (r.headers.get("content-type") ?? "").includes("json") ? r.json() : null))
-      .catch(() => null)
-      .then((j: Status) => { if (alive) { setStatus(j); setChecked(true); } });
-    return () => { alive = false; };
-  }, []);
-
-  if (!checked) return <p className="text-xs text-muted">جارٍ التحقق من إمكانية الرفع…</p>;
-  if (!status?.enabled) {
-    return (
-      <p className="rounded-lg bg-amber-50 p-3 text-sm text-warn" data-upload-disabled>
-        الرفع المباشر إلى Cloudflare R2 غير مُفعّل في هذه البيئة. استخدم رابط YouTube أو رابطًا خارجيًا، أو فعّل ربط R2 (FILES) في Cloudflare Pages.
-      </p>
-    );
+  if (!can.superAdmin(roles)) {
+    return <p className="rounded-xl bg-amber-50 p-3 text-sm text-warn" data-upload-disabled>رفع الملفات متاح للمدير العام فقط. يمكنك استخدام رابط YouTube أو رابط خارجي.</p>;
   }
 
   async function upload(file: File) {
-    if (file.size > status!.max_bytes) { setMsg({ ok: false, text: `الحد الأقصى ${formatBytes(status!.max_bytes)}` }); return; }
+    const problem = checkUpload(file);
+    if (problem) { setMsg({ ok: false, text: problem }); return; }
+    const t = UPLOAD_TYPES[file.type]!;
+    const key = uploadPath(file.type, new Date(), crypto.randomUUID());
     setBusy(true); setMsg(null);
-    const body = new FormData();
-    body.append("file", file);
-    const res = await callFunction("/api/upload", { method: "POST", body }).catch(() => null);
+    const { error } = await getBrowserClient().storage.from("materials").upload(key, file, { contentType: file.type, cacheControl: "31536000", upsert: false });
     setBusy(false);
-    if (!res?.ok) {
-      const err = res ? ((await res.json().catch(() => ({}))) as { error?: string }).error : "network";
-      setMsg({ ok: false, text: `تعذر الرفع: ${err ?? res?.status}` }); return;
-    }
-    const u = (await res.json()) as Uploaded;
-    onUploaded(u);
-    setMsg({ ok: true, text: `تم الرفع (${formatBytes(u.size_bytes)}). احفظ النموذج لتسجيل الملف.` });
+    if (error) { setMsg({ ok: false, text: `تعذر الرفع: ${error.message}` }); return; }
+    onUploaded({ object_key: key, size_bytes: file.size, mime_type: file.type, kind: t.kind });
+    setMsg({ ok: true, text: `تم الرفع (${formatBytes(file.size)}). احفظ النموذج لتسجيل الملف.` });
   }
 
   return (
-    <div className="rounded-lg border border-dashed border-brand-500 p-3" data-upload-enabled>
-      <label className="text-sm font-medium">رفع ملف إلى R2 (PDF، صوت، صورة — حتى {formatBytes(status.max_bytes)})
-        <input type="file" disabled={disabled || busy} className="mt-1 block w-full text-sm"
-          accept="application/pdf,audio/mpeg,audio/mp4,audio/ogg,audio/wav,image/png,image/jpeg,image/webp,image/svg+xml"
-          onChange={(e) => { const f = e.target.files?.[0]; if (f) void upload(f); }} />
+    <div className="rounded-2xl border-2 border-dashed border-brand-500 bg-brand-50/40 p-4" data-upload-enabled>
+      <label className="block text-sm font-bold">رفع ملف (PDF، صورة، أو تسجيل صوتي — حتى {formatBytes(MAX_UPLOAD_BYTES)})
+        <input type="file" disabled={disabled || busy} className="mt-2 block w-full text-sm" data-upload-input
+          accept={Object.keys(UPLOAD_TYPES).join(",")}
+          onChange={(e) => { const f = e.target.files?.[0]; if (f) void upload(f); e.target.value = ""; }} />
       </label>
-      {busy && <p className="mt-1 text-sm">جارٍ الرفع…</p>}
-      {msg && <p role="status" className={`mt-1 text-sm ${msg.ok ? "text-ok" : "text-danger"}`}>{msg.text}</p>}
+      {busy && <div className="skeleton mt-2 h-3" aria-label="جارٍ الرفع" />}
+      {msg && <p role="status" className={`mt-2 text-sm ${msg.ok ? "text-ok" : "text-danger"}`}>{msg.text}</p>}
     </div>
   );
 }

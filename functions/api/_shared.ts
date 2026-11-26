@@ -10,8 +10,6 @@ export interface Env {
   SUPABASE_URL: string;          // plain var (same value as NEXT_PUBLIC_SUPABASE_URL)
   SUPABASE_ANON_KEY: string;     // plain var (public anon key)
   PAGES_DEPLOY_HOOK_URL?: string; // secret — Cloudflare Pages deploy hook
-  FILES?: R2Bucket;              // R2 bucket binding (optional; uploads disabled without it)
-  FILES_PUBLIC_BASE_URL?: string; // public R2 URL, echoed back to the admin UI
 }
 
 export const json = (body: unknown, status = 200, extra: Record<string, string> = {}) =>
@@ -20,7 +18,7 @@ export const json = (body: unknown, status = 200, extra: Record<string, string> 
     headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", ...extra },
   });
 
-export type RoleCheck = "is_publisher" | "is_content_staff";
+export type RoleCheck = "is_publisher" | "is_content_staff" | "is_super_admin";
 
 /** Returns true only when Postgres confirms the bearer token's user passes `check`. */
 export async function callerPasses(request: Request, env: Env, check: RoleCheck): Promise<boolean> {

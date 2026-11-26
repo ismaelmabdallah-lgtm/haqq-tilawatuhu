@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { table } from "@/lib/admin/db";
+import { QUESTION_TABS, SubTabs } from "@/components/admin/SubTabs";
 import { arDigits } from "@/lib/quran/ref";
 
 type Exam = { id: string; title: string; kind: string; status: string; total_marks: number; requires_account: boolean; created_at: string };
@@ -16,6 +17,7 @@ export default function AdminExamsPage() {
   }, []);
   return (
     <div data-admin-exams>
+      <SubTabs tabs={QUESTION_TABS} active="exams" />
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-2xl font-bold text-brand-900">الاختبارات</h1>
         <Link href="/admin/exams/edit/" className="tap inline-flex items-center rounded-lg bg-brand-700 px-4 text-white">+ اختبار جديد</Link>

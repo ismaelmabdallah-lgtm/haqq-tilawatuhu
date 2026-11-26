@@ -7,15 +7,9 @@ compatibility_date = "2026-11-01"
 # Public values (same as NEXT_PUBLIC_*). Set them here or in the Pages dashboard.
 SUPABASE_URL = ""
 SUPABASE_ANON_KEY = ""
-FILES_PUBLIC_BASE_URL = ""
 NEXT_PUBLIC_SUPABASE_URL = "https://dvxnbpnjhkdommmhkwvr.supabase.co"
 NEXT_PUBLIC_SUPABASE_ANON_KEY = "sb_publishable_oNhW1UZg9eFhVvcRUMDGQQ_-2Gr_14x"
 
-# R2 uploads: uncomment after creating the bucket (`wrangler r2 bucket create haqq-files`).
-# Without this binding /api/upload reports enabled=false and the admin UI hides
-# direct uploads (YouTube and external links keep working).
-# [[r2_buckets]]
-# binding = "FILES"
-# bucket_name = "haqq-files"
+# File uploads use Supabase Storage (bucket "materials", migration 0006) — no R2 binding needed.
 
 # Secret (never commit): wrangler pages secret put PAGES_DEPLOY_HOOK_URL

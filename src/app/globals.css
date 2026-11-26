@@ -4,23 +4,24 @@
   --font-sans: var(--font-ui), "Segoe UI", Tahoma, sans-serif;
   --font-quran: var(--font-quran-face), "Amiri Quran", "KFGQPC Uthmanic Script HAFS", serif;
 
-  --color-ink: #1c2a26;
-  --color-muted: #5b6b66;
-  --color-paper: #fbfaf6;
+  /* Brand: emerald #14532d · warm gold #d97706 · warm ivory #fdfbf7 (high contrast on ivory) */
+  --color-ink: #1a2420;
+  --color-muted: #55615c;
+  --color-paper: #fdfbf7;
   --color-card: #ffffff;
-  --color-line: #e4e0d5;
-  --color-brand-50: #eef6f3;
-  --color-brand-100: #d5eae2;
-  --color-brand-500: #2f7d66;
-  --color-brand-600: #24684f;
-  --color-brand-700: #1b5440;
-  --color-brand-900: #0f3327;
-  --color-gold-100: #f6eedb;
-  --color-gold-500: #b8913f;
-  --color-gold-700: #7d6125;
+  --color-line: #e7e2d6;
+  --color-brand-50: #f0f7f2;
+  --color-brand-100: #d7eadd;
+  --color-brand-500: #1f7a45;
+  --color-brand-600: #18653a;
+  --color-brand-700: #14532d;
+  --color-brand-900: #0d3a1f;
+  --color-gold-100: #fdf1dc;
+  --color-gold-500: #d97706;
+  --color-gold-700: #92400e;
   --color-danger: #a93a2e;
-  --color-warn: #9a6a12;
-  --color-ok: #24684f;
+  --color-warn: #92400e;
+  --color-ok: #18653a;
 }
 
 :root { color-scheme: light; }
@@ -62,3 +63,15 @@ body {
 .prose-ar th, .prose-ar td { border: 1px solid var(--color-line); padding: 0.4rem 0.6rem; text-align: start; }
 
 :focus-visible { outline: 3px solid var(--color-gold-500); outline-offset: 2px; }
+
+/* Loading skeletons */
+.skeleton { position: relative; overflow: hidden; background: #efeadf; border-radius: 0.75rem; }
+.skeleton::after {
+  content: ""; position: absolute; inset: 0; transform: translateX(100%);
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.6), transparent);
+  animation: shimmer 1.4s infinite;
+}
+@keyframes shimmer { to { transform: translateX(-100%); } }
+
+/* Space for the fixed bottom navigation on phones */
+@media (max-width: 767px) { body { padding-bottom: calc(68px + env(safe-area-inset-bottom)); } }

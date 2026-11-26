@@ -1,22 +1,22 @@
 /**
- * E2E (Phase 2): public site built from the TEST fixture, served by the
- * Cloudflare Pages emulator.
- *   node tests/fixtures/make-site-fixture.mjs
- *   HAQQ_CONTENT_FIXTURE=tests/fixtures/site.fixture.json NEXT_PUBLIC_FILES_BASE_URL=https://files.test npm run build
- *   npx wrangler pages dev out --port 8788
- *   node tests/e2e/public-site.mjs
+ * E2E: public site — pre-rendered pages, live refresh without rebuild, level
+ * hubs, files from Supabase Storage, navigation. Run via `npm run test:e2e`
+ * (static build and live data both come from the PGlite stand-in).
  */
 import { chromium } from "playwright";
 import assert from "node:assert/strict";
-import { waitForSite } from "./warmup.mjs";
 import { readFileSync } from "node:fs";
+import { waitForSite } from "./warmup.mjs";
+import { sql } from "./sql.mjs";
+import { EXAMS } from "../fixtures/exam-fixture.mjs";
 
-const BASE = process.env.BASE_URL ?? "http://localhost:8788";
-await waitForSite(BASE);
+const BASE = process.env.BASE_URL ?? "http://localhost:8799";
+const SB = process.env.SUPABASE_TEST_URL ?? "http://127.0.0.1:54329";
+await waitForSite(BASE, ["/", "/levels/", "/levels/l1/", "/levels/l1/l1-c2/zz-test-lesson/", "/academy/", "/learn/"]);
 const raw = readFileSync("vendor/tanzil/quran-uthmani.txt", "utf8");
 const ayah = (s, a) => raw.split("\n").find((l) => l.startsWith(`${s}|${a}|`)).replace(/\r$/, "").split("|").slice(2).join("|");
-const LESSON = "/levels/l1/l1-c2/l1-c2-01/";
-const fid = (n) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
+const LESSON = "/levels/l1/l1-c2/zz-test-lesson/";
+const practice = EXAMS.find((e) => e.key === "practice");
 
 const browser = await chromium.launch();
 const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, locale: "ar" });
@@ -26,137 +26,169 @@ page.on("pageerror", (e) => errors.push(`${page.url()}: ${e.message}`));
 
 let failed = 0;
 async function check(name, fn) {
-  try { await fn(); console.log(`✔ ${name}`); } catch (e) { failed++; console.log(`✖ ${name}\n   ${e.message.split("\n")[0]}`); }
+  try { await fn(); console.log(`✔ ${name}`); } catch (e) { failed++; console.log(`✖ ${name}\n   ${process.env.DEBUG ? e.stack : e.message.split("\n")[0]}`); }
 }
-const go = (p) => page.goto(BASE + p, { waitUntil: "networkidle" });
-const text = () => page.locator("main").innerText();
+const go = (p) => page.goto(BASE + p, { waitUntil: "load" });
+const main = () => page.locator("main");
 
-await check("home: RTL, levels, verified hero verse", async () => {
+await check("pages are pre-rendered: the lesson HTML already contains its text and verse (no JavaScript)", async () => {
+  const html = await (await fetch(BASE + LESSON)).text();
+  assert.ok(html.includes("درس تجريبي لأحكام النون"), "lesson title in HTML");
+  assert.ok(html.includes(ayah(2, 121).split(" ").slice(0, 6).join(" ")), "verse resolved at build time");
+  const levels = await (await fetch(BASE + "/levels/")).text();
+  assert.ok(levels.includes("متطلب الإجازة"), "levels in HTML");
+});
+
+await check("home: RTL, brand emblem, verified hero verse, live level cards", async () => {
   await go("/");
   assert.equal(await page.getAttribute("html", "dir"), "rtl");
-  assert.equal(await page.getAttribute("html", "lang"), "ar");
-  const t = await text();
-  assert.ok(t.includes("المستوى الأول") && t.includes("المستوى الثاني"));
-  const hero = await page.locator("[data-quran-ref] blockquote").first().innerText();
-  assert.equal(hero.trim(), ayah(2, 121).split(" ").slice(0, 6).join(" "));
+  assert.ok(await page.locator('header svg[aria-label="شعار حق تلاوته"]').count());
+  assert.equal((await page.locator("[data-quran-ref] blockquote").first().innerText()).trim(), ayah(2, 121).split(" ").slice(0, 6).join(" "));
+  await main().getByText("المستوى الأول").first().waitFor();
+  assert.equal(await page.getAttribute('link[rel="icon"]', "href"), "/icon.svg");
 });
 
-await check("levels overview lists levels, chapters, published counts", async () => {
+await check("mobile: fixed bottom navigation with the 4 core tabs + account; no top menu", async () => {
+  const nav = page.locator("[data-bottom-nav]");
+  assert.ok(await nav.isVisible());
+  assert.deepEqual((await nav.locator("a").allInnerTexts()).map((t) => t.trim()), ["المستويات", "الأكاديمية", "الاختبارات", "الإعلانات", "دخول"]);
+  for (const a of await nav.locator("a").all()) assert.ok((await a.boundingBox()).height >= 44, "touch target ≥ 44px");
+  await nav.getByText("الأكاديمية").click();
+  await page.waitForURL("**/academy/");
+});
+
+await check("desktop: top navigation has exactly the 4 core items + account (no encyclopedia/search)", async () => {
+  const d = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+  await d.goto(BASE + "/", { waitUntil: "load" });
+  const items = (await d.locator('header nav[aria-label="القائمة الرئيسية"] a').allInnerTexts()).map((t) => t.trim());
+  assert.deepEqual(items, ["المستويات", "الأكاديمية", "الاختبارات", "الإعلانات", "دخول"]);
+  assert.equal(await d.locator("[data-bottom-nav]").isVisible(), false);
+  await d.close();
+});
+
+await check("levels overview: 4 levels with lesson / file / exam counts", async () => {
   await go("/levels/");
-  const t = await text();
-  assert.ok(t.includes("أحكام النون الساكنة والتنوين"));
-  assert.ok(t.includes("٢ درس"), "l1-c2 shows 2 published lessons (draft excluded)");
-  assert.ok(t.includes("منهج تجريبي لأغراض الاختبار فقط"), "affiliation note");
+  await page.locator("[data-level-card]").nth(3).waitFor();
+  assert.equal(await page.locator("[data-level-card]").count(), 4);
+  const l1 = await page.locator('[data-level-card="l1"]').innerText();
+  assert.ok(l1.includes("١\nدرس") && l1.includes("١\nملف") && l1.includes("٣\nاختبار"), l1);
 });
 
-await check("chapter lists published lessons with nesting, never drafts", async () => {
-  await go("/levels/l1/l1-c2/");
-  const t = await text();
-  assert.ok(t.includes("الإظهار الحلقي"));
-  assert.ok(!t.includes("درس مسودة"), "draft lesson must not appear");
+await check("level hub: downloadable PDF summary (signed Storage URL), lessons and exams; drafts hidden", async () => {
+  await go("/levels/l1/");
+  const hub = page.locator("[data-level-hub=l1]");
+  await hub.getByText("[تجريبي] ملخص المستوى الأول").waitFor();
+  const t = await hub.innerText();
+  assert.ok(!t.includes("ملف مسودة") && !t.includes("درس مسودة"), "no drafts");
+  assert.ok(t.includes("درس تجريبي لأحكام النون"));
+  assert.ok(await hub.locator("a[href^='/exams/']").count() >= 3, "level exams listed");
+  // The signed URL opens in a new tab (a PDF download in headless Chromium, so watch the request).
+  const [req] = await Promise.all([
+    page.context().waitForEvent("request", (r) => r.url().includes("/storage/v1/object/sign/materials/pdf/2026/11/e2e-summary.pdf") && r.method() === "GET"),
+    hub.locator("[data-download]").first().click(),
+  ]);
+  assert.ok(req.url().includes("token="), "signed URL");
 });
 
-await check("lesson page: provenance, page refs, structured content", async () => {
+await check("a draft file cannot be signed for download (storage RLS)", async () => {
+  const anon = `${Buffer.from('{"alg":"none"}').toString("base64url")}.${Buffer.from('{"role":"anon"}').toString("base64url")}.x`;
+  const r = await fetch(`${SB}/storage/v1/object/sign/materials/pdf/2026/11/e2e-draft.pdf`, { method: "POST", headers: { authorization: `Bearer ${anon}`, "content-type": "application/json" }, body: "{}" });
+  assert.equal(r.status, 400);
+});
+
+await check("lesson: provenance, structured content, verbatim Quran, audio clip, video, files, exam", async () => {
   await go(LESSON);
-  const t = await text();
-  for (const s of ["مراجَع علميًا", "منقول من المنهج", "ص ٤٩–٦٥", "أهداف الدرس", "النون الساكنة", "حروف الإظهار", "أقصى الحلق", "ص ٥١"]) {
-    assert.ok(t.includes(s), `missing «${s}»`);
-  }
-  assert.ok(!t.includes("مورد مسودة"), "draft resource must not appear");
-});
-
-await check("lesson page: Quranic text is verbatim Tanzil (token + example), draft example hidden", async () => {
-  const blocks = await page.locator("[data-quran-ref] blockquote").allInnerTexts();
-  const joined = blocks.join("\n");
-  assert.ok(joined.includes(ayah(2, 121).split(" ").slice(0, 6).join(" ")), "[[quran:2:121:1-6]]");
-  for (const a of [2, 3, 4]) assert.ok(joined.includes(ayah(1, a)), `example 1:${a}`);
-  assert.ok(!joined.includes(ayah(112, 1)), "draft example 112:1 must not render");
-});
-
-await check("lesson page: YouTube (nocookie), R2 download URL, exam link", async () => {
+  await page.locator("[data-lesson=zz-test-lesson]").waitFor();
+  const t = await main().innerText();
+  for (const s of ["مراجَع علميًا", "شرح مساند", "ص ٤٩–٦٥", "التعريفات", "الأحكام والقواعد", "أقصى الحلق", "صور ومقاطع صوتية"]) assert.ok(t.includes(s), `missing «${s}»`);
+  const verses = (await page.locator("[data-quran-ref] blockquote").allInnerTexts()).join("\n");
+  assert.ok(verses.includes(ayah(2, 121).split(" ").slice(0, 6).join(" ")));
+  for (const a of [2, 3, 4]) assert.ok(verses.includes(ayah(1, a)), `example 1:${a}`);
+  await page.locator("audio[data-audio]").waitFor({ state: "attached" });
+  assert.match(await page.getAttribute("audio[data-audio]", "src"), /\/object\/sign\/materials\/audio\//);
   assert.ok(await page.locator('iframe[src^="https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ"]').count());
-  assert.equal(await page.locator('a[href="https://files.test/resources/2026/11/test.pdf"]').count(), 1);
-  assert.equal(await page.locator(`a[href="/exams/${fid(110)}/"]`).count(), 1);
+  assert.ok(await page.locator('a[href="https://tanzil.net"]').count());
+  assert.equal(await page.locator(`a[href="/exams/${practice.id}/"]`).count(), 1);
 });
 
-await check("lesson progress: marked viewed, completion toggles and survives reload", async () => {
+await check("lesson progress is saved in the browser for guests", async () => {
   await page.getByRole("button", { name: "أكملت الدرس" }).click();
-  await page.getByRole("button", { name: "✓ أكملت هذا الدرس" }).waitFor();
   await page.reload({ waitUntil: "load" });
   await page.getByRole("button", { name: "✓ أكملت هذا الدرس" }).waitFor();
-  const stored = await page.evaluate(() => JSON.parse(localStorage.getItem("haqq:progress:v1") ?? "{}"));
-  assert.ok(stored[fid(30)]?.completed_at && stored[fid(30)]?.viewed_at);
-  await go("/levels/l1/l1-c2/");
-  assert.ok(await page.locator('[aria-label="مكتمل"]').count() >= 1, "progress dot on chapter page");
 });
 
-await check("draft lesson URL is not exported (404)", async () => {
-  const res = await page.goto(BASE + "/levels/l1/l1-c2/l1-c2-03/");
-  assert.equal(res.status(), 404);
+await check("LIVE: a lesson published after the build appears and opens without a rebuild", async () => {
+  await sql(`select set_config('app.content_transition','on',true);
+    insert into public.lessons (id, chapter_id, code, sort_order, title, body_md, origin, status, scientifically_verified)
+    values (md5('haqq:e2e:live')::uuid, md5('haqq:chapter:minhaj-al-darisin-ed2-2026:l1-c2')::uuid, 'zz-live-lesson', 97,
+            'درس نُشر بعد البناء', E'شرح حي.\\n\\n[[quran:1:5]]', 'supplementary_explanation', 'published', true)`);
+  await go("/levels/l1/");
+  const link = page.locator("[data-lesson-link=zz-live-lesson]");
+  await link.waitFor({ timeout: 15_000 });
+  assert.match(await link.getAttribute("href"), /^\/learn\/\?level=l1&chapter=l1-c2&lesson=zz-live-lesson$/);
+  await link.click();
+  await page.locator("[data-lesson=zz-live-lesson]").waitFor();
+  assert.ok((await page.locator("[data-quran-ref] blockquote").innerText()).includes(ayah(1, 5)));
 });
 
-await check("exam link opens the client-only exam route", async () => {
-  await go(LESSON);
-  await page.locator(`a[href="/exams/${fid(110)}/"]`).click();
-  await page.waitForURL(`**/exams/${fid(110)}/`);
-  await page.locator(`[data-shell-id="${fid(110)}"]`).waitFor({ timeout: 10_000 });
+await check("LIVE: a shared link to the new lesson's canonical URL redirects to the live route", async () => {
+  await go("/levels/l1/l1-c2/zz-live-lesson/");
+  await page.waitForURL(/\/learn\/\?level=l1&chapter=l1-c2&lesson=zz-live-lesson/);
+  await page.locator("[data-lesson=zz-live-lesson]").waitFor();
 });
 
-await check("encyclopedia index + entry with verse and related lesson", async () => {
-  await go("/encyclopedia/");
-  await page.getByRole("link", { name: /الإظهار الحلقي/ }).first().click();
-  await page.waitForURL("**/encyclopedia/izhar-halqi/");
-  const t = await text();
-  assert.ok(t.includes("التعريف") && t.includes("دروس ذات صلة"));
-  assert.ok((await page.locator("[data-quran-ref] blockquote").innerText()).includes(ayah(1, 1)));
+await check("LIVE: archiving hides the lesson again without a rebuild; drafts never open", async () => {
+  await sql(`select set_config('app.content_transition','on',true); update public.lessons set status = 'archived' where id = md5('haqq:e2e:live')::uuid`);
+  await go("/levels/l1/");
+  await page.locator("[data-lesson-link=zz-test-lesson]").waitFor();
+  assert.equal(await page.locator("[data-lesson-link=zz-live-lesson]").count(), 0);
+  await go("/levels/l1/l1-c2/zz-draft-lesson/");
+  await page.waitForURL(/\/learn\//);
+  await page.locator("[data-not-found]").waitFor();
+  assert.ok(!(await main().innerText()).includes("درس مسودة"));
 });
 
-await check("academy: letters, points by area, characteristic pairs", async () => {
+await check("pre-rendered pages stay readable when the database is unreachable", async () => {
+  const p = await browser.newPage();
+  await p.route((url) => url.href.startsWith(SB), (r) => r.abort());
+  await p.goto(BASE + "/levels/l1/", { waitUntil: "load" });
+  await p.locator("[data-lesson-link=zz-test-lesson]").waitFor();
+  await p.close();
+});
+
+await check("academy hub, letter, point and characteristic pages", async () => {
   await go("/academy/");
-  const t = await text();
-  for (const s of ["أقصى الحلق", "الجهر", "الهمس", "الصفير", "صفات لها ضد"]) assert.ok(t.includes(s), `missing ${s}`);
+  await page.locator("[data-academy]").getByText("أقصى الحلق").first().waitFor();
+  const t = await main().innerText();
+  for (const s of ["الجهر", "الهمس", "الصفير", "صفات لها ضد"]) assert.ok(t.includes(s), s);
   await page.getByRole("link", { name: "الحرف ء" }).click();
   await page.waitForURL("**/academy/letters/1/");
-  const lt = await text();
-  assert.ok(lt.includes("أقصى الحلق") && lt.includes("الجهر") && lt.includes("أخطاء شائعة"));
+  await page.locator("[data-academy-letter]").getByText("أخطاء شائعة").waitFor();
   await go("/academy/characteristics/jahr/");
-  assert.ok((await text()).includes("ضدها: الهمس"));
+  await page.getByText("ضدها: الهمس").waitFor();
 });
 
-await check("resources page groups published files only", async () => {
+await check("resources page lists published files only", async () => {
   await go("/resources/");
-  const t = await text();
-  assert.ok(t.includes("ملفات PDF") && t.includes("ملخص أحكام النون") && t.includes("رابط خارجي"));
-  assert.ok(!t.includes("مورد مسودة"));
+  await page.locator("[data-resources]").getByText("[تجريبي] ملخص المستوى الأول").waitFor();
+  const t = await main().innerText();
+  assert.ok(t.includes("ملفات PDF") && t.includes("مقاطع صوتية") && t.includes("روابط"));
+  assert.ok(!t.includes("ملف مسودة"));
 });
 
 await check("announcements: pinned shown, expired hidden", async () => {
   await go("/announcements/");
-  const t = await text();
-  assert.ok(t.includes("إعلان مثبّت") && t.includes("مثبّت"));
-  assert.ok(!t.includes("إعلان منتهي"));
+  await page.locator("[data-announcement]").first().waitFor();
+  const t = await main().innerText();
+  assert.ok(t.includes("إعلان مثبّت") && !t.includes("إعلان منتهي"));
 });
 
-await check("search ignores diacritics/hamza forms and finds lessons + encyclopedia", async () => {
+await check("encyclopedia and search remain available (footer links)", async () => {
+  await go("/encyclopedia/izhar-halqi/");
+  assert.ok((await main().innerText()).includes("التعريف"));
   await go("/search/");
   await page.fill("#q", "الاظهار");
   await page.getByText(/نتيجة/).waitFor();
-  const t = await text();
-  assert.ok(t.includes("الموسوعة") && t.includes("درس"));
-});
-
-await check("about page renders approved text and the name's verse", async () => {
-  await go("/about/");
-  const t = await text();
-  assert.ok(t.includes("الرؤية والرسالة") && t.includes("الاستقلالية") && t.includes("مشروع تنزيل"));
-  assert.ok((await page.locator("[data-quran-ref] blockquote").innerText()).includes(ayah(2, 121)));
-});
-
-await check("mobile menu opens and navigates", async () => {
-  await go("/");
-  await page.getByRole("button", { name: "القائمة" }).click();
-  await page.locator("#mobile-nav").getByRole("link", { name: "الموسوعة" }).click();
-  await page.waitForURL("**/encyclopedia/");
 });
 
 await check("no uncaught page errors", async () => assert.deepEqual(errors, []));

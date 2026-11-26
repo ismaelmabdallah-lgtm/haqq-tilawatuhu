@@ -30,7 +30,7 @@ export function LinksEditor({ def, selfId }: { def: LinkDef; selfId: string }) {
     setError(null);
     const row: Row = { [def.self]: selfId, [def.other]: pick };
     for (const x of def.extra ?? []) if (extra[x.name]) row[x.name] = extra[x.name];
-    if ("sort_order" in (rows[0] ?? {}) || def.table === "lesson_examples" || def.table === "lesson_resources") row.sort_order = rows.length + 1;
+    if ("sort_order" in (rows[0] ?? {}) || ["lesson_examples", "lesson_resources", "level_resources"].includes(String(def.table))) row.sort_order = rows.length + 1;
     const { error: err } = await table(def.table).insert(row);
     if (err) { setError(errorMessage(err)); return; }
     setPick(""); setExtra({}); void load();

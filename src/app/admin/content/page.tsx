@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { StatusBadge } from "@/components/admin/WorkflowPanel";
+import { LESSON_TABS, SubTabs } from "@/components/admin/SubTabs";
 import { ENTITIES, STATUS_LABEL, type ContentStatus, type EntityKey } from "@/lib/admin/entities";
 import { table } from "@/lib/admin/db";
 import { errorMessage } from "@/lib/errors";
@@ -35,6 +36,7 @@ export default function ContentListPage() {
 
   return (
     <div data-content-list={key}>
+      {(key === "lessons" || key === "quranic_examples") && <SubTabs tabs={LESSON_TABS} active={key} />}
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-2xl font-bold text-brand-900">{cfg.label}</h1>
         <Link href={`/admin/content/edit/?entity=${key}`} className="tap inline-flex items-center rounded-lg bg-brand-700 px-4 text-white" data-new>+ {cfg.singular} جديد</Link>

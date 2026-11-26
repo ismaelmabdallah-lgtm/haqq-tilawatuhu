@@ -8,6 +8,8 @@
 | `20261126000400_learning_engagement.sql` | notifications, progress & mastery, guest-progress import, recommendations, bookmarks, announcements, certificates, image storage |
 | `20261126000500_live_api_grants.sql` | additive: table grants to the API roles (re-applying every earlier revoke), `heartbeat()` for `service_role`, and `extensions` on the search path of the five functions using pgcrypto/pg_trgm — matches how the live project was created |
 
+| `20261127000600_solo_admin_materials.sql` | additive: `publish_content()` (super admin publishes / archives / returns to draft in one step; counts as scientific verification; logged in `review_events` with a snapshot), `level_resources` (files on a level), private Storage bucket `materials` (25 MiB, PDF/PNG/JPEG/WebP/audio; upload/replace/delete = super admin only; read = only files of **published** resources) |
+
 Tests: `npm run test:db:pglite` runs the shim (which mirrors the live project: extensions in schema `extensions`, no automatic grants, function-body checks off during migrations), all migrations, the seed and the 93 checks in-process.
 
 Seed: `supabase/seed/0001_minhaj_al_darisin.sql` (generated, idempotent). Tests: `supabase/tests/` (`npm run test:db`).
@@ -29,6 +31,7 @@ Visibility: published content → everyone (incl. anonymous); anything else → 
 | `verify_certificate(code)` | anyone | public verification |
 | `search_content(query, edition?, level?)` | anyone | admin/search fallback |
 | `transition_content(entity, id, status, comment?)`, `assign_reviewer` | team | review workflow |
+| `publish_content(entity, id, to = 'published', comment?)` | super admin | one-step publish / archive / back to draft (0006) |
 | `new_question_version(question)` | content team | corrections as new versions |
 | `publish_exam`, `set_exam_status`, `release_results` | editors/admins | exams |
 | `list_grading_queue()`, `grade_answer(attempt, exam_question, part_scores, feedback?)` | graders | manual marking |

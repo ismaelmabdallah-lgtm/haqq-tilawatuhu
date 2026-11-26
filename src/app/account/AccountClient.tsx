@@ -9,12 +9,26 @@ import { importItems, progressStore } from "@/lib/progress";
 import { arDigits } from "@/lib/quran/ref";
 import { shellHref } from "@/lib/shell-route";
 import { getBrowserClient } from "@/lib/supabase/client";
+import { useLiveSite } from "@/lib/content/live";
+import { builtFrom, lessonLink, lessonPath, type Site } from "@/lib/content/model";
 
 export type LessonIndex = { lessons: { id: string; title: string; href: string; levelId: string }[]; levels: { id: string; title: string }[] };
 
+/** Lesson index from the live snapshot (falls back to the pre-rendered one). */
+function useLessonIndex(initial: Site): LessonIndex {
+  const { site } = useLiveSite(initial);
+  const s = site ?? initial;
+  const built = builtFrom(initial);
+  return {
+    lessons: s.lessons.flatMap((l) => { const p = lessonPath(s, l.id); return p ? [{ id: l.id, title: l.title, href: lessonLink(built, p), levelId: p.level.id }] : []; }),
+    levels: s.levels.map((l) => ({ id: l.id, title: l.title })),
+  };
+}
+
 const safeNext = (n: string | null) => (n && n.startsWith("/") && !n.startsWith("//") ? n : null);
 
-export function AccountClient({ index }: { index: LessonIndex }) {
+export function AccountClient({ initial }: { initial: Site }) {
+  const index = useLessonIndex(initial);
   const { session, loading } = useSession();
   const sp = useSearchParams();
   const next = safeNext(sp.get("next"));

@@ -1,42 +1,43 @@
-# Frontend (2026-11-26)
+# Frontend (updated 2026-11-27 — v1 solo-admin refactor)
 
-Next.js 16 App Router with `output: 'export'`, Tailwind 4, supabase-js. No Server Actions, no `src/app/api/`, no middleware: the site is static files plus two Cloudflare Pages Functions.
+Next.js 16 App Router with `output: 'export'`, Tailwind 4, supabase-js. No Server Actions, no `src/app/api/`, no middleware: static files plus one Cloudflare Pages Function (`/api/rebuild`, optional).
 
-## Three layers, kept separate
+## Layers
 
 | Layer | Where | Holds secrets? |
 |---|---|---|
 | Static site (HTML/JS) | `src/app/` → `out/` | no — only the public anon key |
-| Pages Functions | `functions/api/upload.ts`, `functions/api/rebuild.ts` | R2 binding, deploy hook |
-| Authorization + grading | Supabase (RLS + SQL functions) | — |
+| Pages Function | `functions/api/rebuild.ts` (optional pre-render refresh) | deploy hook |
+| Authorization, grading, storage rules | Supabase (RLS, SQL functions, Storage policies) | — |
 
-The Functions authorize by calling `is_content_staff()` / `is_publisher()` with the caller's token, so Postgres stays the single source of truth.
+## Hybrid content: pre-rendered, then live
 
-## Content pages are built, not queried
+* **Build:** `src/lib/content/site.ts` loads one snapshot through the anonymous role (RLS ⇒ published only) and pre-renders levels, chapters, lessons, academy, resources, announcements — fast, indexable, readable while the free DB is paused. Lesson verses are resolved at build time from the verified Tanzil bundle.
+* **Browser:** `src/lib/content/live.ts` loads a *light* snapshot (no lesson bodies) once per page and swaps it in; a lesson page fetches its own full row if it changed. Newly published content appears and archived content disappears **without a rebuild**. If the DB is unreachable, the pre-rendered content stays.
+* **New items:** links point to the pre-rendered URL when the item was in the build, otherwise to the live routes `/learn/?level=…&chapter=…&lesson=…` and `/academy/item/?type=…&key=…`. A shared canonical URL of a not-yet-built lesson lands on the 404 page, which forwards to `/learn/`.
+* `/exams`, `/exams/:id`, `/attempts/:id`, `/certificates/:id`, `/account`, `/admin` are client-only as before.
 
-`src/lib/content/site.ts` loads one snapshot per build through the **anonymous** client, so RLS guarantees only `status = 'published'` content can be exported (a second filter in code is defence in depth). Any DB error fails the build. Dynamic routes with no published rows export a `_` placeholder page (export mode rejects empty `generateStaticParams`). Publishing → "rebuild site" → `/api/rebuild` → Pages deploy hook.
+## Files (Supabase Storage)
 
-Lesson URLs use codes from the schema: `/levels/<level.code>/<chapter.code>/<lesson.code>/`.
+Uploads go from the admin UI straight to the private bucket **`materials`** (`src/components/admin/UploadWidget.tsx`, rules in `src/lib/admin/upload-rules.ts`). Storage RLS (migration 0006): insert/update/delete = super admin; read = only objects referenced by a **published** resource. Visitors get short-lived signed URLs (`ResourceItem`), so draft files can never be downloaded. Cloudflare R2 is no longer used (existing `r2` rows still render if `NEXT_PUBLIC_FILES_BASE_URL` is set).
 
-## Client-only routes
+## Solo admin (v1)
 
-`/exams/:id`, `/attempts/:id`, `/certificates/:id` are exported once as `/<route>/_/`. `public/_redirects` rewrites (status 200) any id to that shell; `next dev` mirrors it with dev-only rewrites. The page reads the id from `window.location` (`src/lib/shell-route.ts`), so direct open, refresh and links all work. Links to these routes are plain `<a>`.
-
-## Exams
-
-All grading, release rules and key hiding happen in SQL. The browser keeps a guest attempt's one-time token in `localStorage` (`src/lib/exams/attempt-store.ts`) to resume, submit, reopen results and later claim the attempt into an account. Unsaved answers are kept locally until the server confirms them. The timer uses `server_now` from the paper; the server enforces the deadline.
+* Sidebar: الملفات والملخصات · الدروس · بنك الأسئلة والاختبارات · الإعلانات · الأكاديمية والفريق.
+* The super admin publishes / archives / returns to draft in one click (`publish_content()`, recorded in `review_events`). The two-person review path, assignments, comments and `/admin/review/` remain for a future team.
+* Essay/audio question types are rejected in the question builder; `/admin/grading/` is hidden from the sidebar (route, SQL and player support remain).
+* New formal exams default to "requires account"; practice exams stay open to guests.
 
 ## Quranic text
 
-`scripts/quran-setup.mjs` (runs before dev/build) downloads the Tanzil Uthmani v1.1 text, refuses to continue unless the SHA-256 matches the pinned value, and writes `public/quran/<surah>.json` verbatim with Tanzil's copyright block. Text appears only via references (`quranic_examples`, question `quran_ref`, or `[[quran:2:121]]` in Markdown). `quranic_examples.display_text` is not used.
+`scripts/quran-setup.mjs` downloads/verifies the Tanzil Uthmani v1.1 text (SHA-256 over LF-normalized content, so Windows and Linux checkouts agree) and writes `public/quran/`. Text appears only via references.
 
-## Testing without the live database
+## Tests without the live database
 
-* `npm run test:db:pglite` — PGlite (Postgres in WebAssembly) runs the shim, all migrations, the seed and the 93 DB checks; then the test seed and its cleanup.
-* `npm run test:e2e` — builds from `tests/fixtures/site.fixture.json` (`HAQQ_CONTENT_FIXTURE`, refused on Cloudflare builds), serves it with `wrangler pages dev`, and routes every `/rest/v1` call to PGlite running the real schema (`tests/e2e/pglite-api.mjs`).
-* `tests/fixtures/exam-fixture.mjs` is the single source for the e2e exams and `scripts/test_seed.sql`.
+* `npm run test:db:pglite` — shim + migrations 0001–0006 + seed; `supabase/tests/10_*` (93 checks) and `20_*` (27 checks: direct publishing, level files, storage permissions, answer keys, guest attempt); then the test seed round trip.
+* `npm run test:e2e` — starts `tests/e2e/fake-supabase-server.mjs` (PGlite + real schema + `tests/fixtures/e2e-content.sql`, serving REST/Storage/Auth), **builds the site from it**, serves `out/` with `wrangler pages dev`, and runs the browser suites. Static and live data come from the same database, so the hybrid behaviour (publish/archive without rebuild, DB-down resilience) is tested for real.
 
 ## Known workarounds
 
-* **Windows builds:** Next 16 writes segment-prefetch files into nested folders on Windows; `scripts/postbuild-flatten-segments.mjs` renames them to the flat names the router requests. No-op on Linux (Cloudflare).
-* **Audio answers:** `audio_response` parts show "not available yet" — there is no storage path for learner recordings in the schema.
+* **Windows builds:** `scripts/postbuild-flatten-segments.mjs` fixes Next 16 segment-prefetch file names (no-op on Linux).
+* **Audio answers:** not available to learners (no storage path for recordings in v1).

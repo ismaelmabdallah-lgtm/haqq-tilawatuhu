@@ -28,6 +28,9 @@ const SCOPE: Field[] = [
   { name: "difficulty", label: "الصعوبة (1–5)", type: "int", min: 1, max: 5, required: true },
   { name: "tags", label: "وسوم (وسم في كل سطر)", type: "lines" },
 ];
+/** Hidden in v1 (they need manual grading); still supported by the database and the exam player. */
+const V1_DISABLED_TYPES: string[] = ["long_text", "audio_response"];
+
 const PROVENANCE: Field[] = [
   { name: "origin", label: "مصدر السؤال", type: "select", required: true, options: [["independent_material", "مادة مستقلة"], ["curriculum_quoted", "منقول من المنهج"], ["supplementary_explanation", "شرح مساند"]] },
   { name: "source_edition_id", label: "طبعة المنهج", type: "ref", lookup: "editions" },
@@ -42,7 +45,11 @@ const TEMPLATES: { label: string; make: () => { prompt: Prompt; key: Row } }[] =
   { label: "المقطوع والموصول", make: () => ({ prompt: maqtuMawsulQuestion("الكلمات", { surah: 1, ayah: 1 }), key: { rasm: { correct: "maqtu" } } }) },
   { label: "هاء/تاء التأنيث", make: () => ({ prompt: taAnitheQuestion("الكلمة", { surah: 1, ayah: 1 }), key: { rasm: { correct: "haa" } } }) },
   { label: "إكمال جدول", make: () => ({ prompt: { stem: "أكمل الجدول", parts: [tablePart("t1", ["الحكم"], ["الحالة الأولى", "الحالة الثانية"], 2)] }, key: { t1: { slots: { "r1:c1": "", "r2:c1": "" }, scoring: "partial" } } }) },
-  { label: "سؤال مقالي", make: () => ({ prompt: { stem: "اشرح…", parts: [{ id: "essay", type: "long_text", marks: 3 }] }, key: { essay: {} } }) },
+  { label: "اختيار متعدد (درجات جزئية)", make: () => ({ prompt: { stem: "اختر كل ما ينطبق", parts: [{ id: "p1", type: "multiple_choice", marks: 2, options: [{ id: "a", text: "الأول" }, { id: "b", text: "الثاني" }, { id: "c", text: "الثالث" }] }] }, key: { p1: { correct: ["a", "b"], scoring: "partial" } } }) },
+  { label: "إكمال الفراغ", make: () => ({ prompt: { stem: "أكمل", parts: [{ id: "p1", type: "fill_blank", marks: 2, text: "أحكام النون الساكنة: الإظهار و{b1} والإقلاب و{b2}" }] }, key: { p1: { slots: { b1: "الإدغام", b2: "الإخفاء" }, scoring: "partial" } } }) },
+  { label: "سحب الكلمات وإفلاتها", make: () => ({ prompt: { stem: "ضع الكلمة المناسبة", parts: [{ id: "p1", type: "drag_drop", marks: 1, text: "يُقلب التنوين ميمًا عند {s1}", options: [{ id: "o1", text: "الباء" }, { id: "o2", text: "الميم" }] }] }, key: { p1: { slots: { s1: "o1" } } } }) },
+  { label: "توصيل", make: () => ({ prompt: { stem: "صِل كل حكم بحروفه", parts: [{ id: "p1", type: "matching", marks: 2, left: [{ id: "l1", text: "الإظهار" }, { id: "l2", text: "الإقلاب" }], right: [{ id: "r1", text: "حروف الحلق" }, { id: "r2", text: "الباء" }] }] }, key: { p1: { slots: { l1: "r1", l2: "r2" }, scoring: "partial" } } }) },
+  { label: "ترتيب", make: () => ({ prompt: { stem: "رتّب", parts: [{ id: "p1", type: "ordering", marks: 2, items: [{ id: "a", text: "الأول" }, { id: "b", text: "الثاني" }, { id: "c", text: "الثالث" }] }] }, key: { p1: { order: ["a", "b", "c"], scoring: "partial" } } }) },
 ];
 
 export default function QuestionEditPage() {
@@ -148,6 +155,9 @@ function VersionEditor({ version, onChanged }: { version: Version; onChanged: ()
     try { raw = JSON.parse(promptText); } catch { return { errors: ["نص السؤال: JSON غير صالح"] }; }
     const p = promptSchema.safeParse(raw);
     if (!p.success) return { errors: p.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`) };
+    // v1: every question must be auto-graded (no manual grading queue).
+    const manual = p.data.parts.filter((part) => V1_DISABLED_TYPES.includes(part.type));
+    if (manual.length) return { prompt: p.data, errors: manual.map((part) => `${part.id}: الأسئلة المقالية والصوتية غير مفعّلة في هذا الإصدار (تتطلب تصحيحًا يدويًا)`) };
     try { key = JSON.parse(keyText) as Record<string, unknown>; } catch { return { prompt: p.data, errors: ["المفتاح: JSON غير صالح"] }; }
     return { prompt: p.data, errors: validateKey(p.data, key) };
   }, [promptText, keyText]);

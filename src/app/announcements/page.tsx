@@ -1,16 +1,8 @@
-import { AnnouncementList } from "@/components/content/AnnouncementList";
-import { Breadcrumbs, PageTitle } from "@/components/ui";
-import { getSite } from "@/lib/content/site";
+import { AnnouncementsView } from "@/components/learn/LiveLists";
+import { getSite, lightSite } from "@/lib/content/site";
 
 export const metadata = { title: "الإعلانات" };
 
 export default async function AnnouncementsPage() {
-  const site = await getSite();
-  return (
-    <>
-      <Breadcrumbs items={[{ label: "الإعلانات" }]} />
-      <PageTitle title="الإعلانات" />
-      <AnnouncementList items={site.announcements} resources={site.resources} />
-    </>
-  );
+  return <AnnouncementsView initial={lightSite(await getSite())} />;
 }

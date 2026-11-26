@@ -130,7 +130,11 @@ function ExamEditor({ examId }: { examId: string | null }) {
         {FIELDS.map((f) => (
           <div key={f.name} className={["title", "description"].includes(f.name) ? "sm:col-span-2" : ""}>
             <FieldInput field={f} value={values[f.name] ?? ""} disabled={!draft && !["closes_at", "results_release_at", "model_answer_visibility"].includes(f.name)}
-              onChange={(v) => setValues((s) => ({ ...s, [f.name]: v }))} />
+              onChange={(v) => setValues((s) => ({
+                ...s, [f.name]: v,
+                // Guests take practice exams; graded (formal) exams default to accounts so results are kept.
+                ...(f.name === "kind" && !examId ? { requires_account: v === "formal" } : {}),
+              }))} />
           </div>
         ))}
         <button type="submit" className="tap rounded-lg bg-brand-700 px-6 font-bold text-white sm:col-span-2 sm:w-fit" data-save-exam>{examId ? "حفظ الإعدادات" : "إنشاء الاختبار"}</button>

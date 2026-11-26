@@ -80,7 +80,9 @@ let failed = false;
 {
   const db = await freshDb();
   console.log(`migrated: ${migrations.join(", ")} + seed`);
-  const suite = read("supabase/tests/10_security_and_workflow.sql")
+  // 10_* then every later test file (they reuse its helpers and fixture accounts)
+  const later = readdirSync(join(root, "supabase/tests")).filter((f) => /^[2-9]\d_.*\.sql$/.test(f)).sort();
+  const suite = [read("supabase/tests/10_security_and_workflow.sql"), ...later.map((f) => read(`supabase/tests/${f}`))].join("\n")
     .replace("create schema tests;", "create schema tests;\ncreate table tests.passes (label text);\ngrant usage on schema tests to anon, authenticated;\ngrant insert on tests.passes to anon, authenticated;")
     .replace(/raise notice 'PASS: %', label;/g, "insert into tests.passes values (label);")
     .replace(/raise notice 'PASS: % \(rejected: %\)', label, sqlerrm;/g, "insert into tests.passes values (label);");

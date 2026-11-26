@@ -88,8 +88,9 @@ export function EntityEditor({ entity, id }: { entity: EntityKey; id: string | n
           <FieldInput key={f.name} field={f} value={values[f.name] ?? ""} disabled={!editable || saving} error={errors[f.name]}
             onChange={(val) => setValues((s) => ({ ...s, [f.name]: val }))} />
         ))}
-        {entity === "resources" && v.provider === "r2" && editable && (
-          <UploadWidget onUploaded={(u) => setValues((s) => ({ ...s, object_key: u.object_key, size_bytes: String(u.size_bytes), mime_type: u.mime_type }))} />
+        {entity === "resources" && v.provider === "supabase" && editable && (
+          <UploadWidget onUploaded={(u) => setValues((s) => ({ ...s, object_key: u.object_key, size_bytes: String(u.size_bytes), mime_type: u.mime_type,
+            kind: s.kind === "diagram" && u.kind === "image" ? s.kind : u.kind }))} />
         )}
         {exampleRef && (
           <div>

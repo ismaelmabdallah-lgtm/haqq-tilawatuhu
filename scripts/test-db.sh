@@ -14,6 +14,6 @@ done
 for f in supabase/seed/*.sql; do
   echo "seed:    $f"; "${PSQL[@]}" -d "$DB" -f "$f"
 done
-"${PSQL[@]}" -d "$DB" -f supabase/tests/10_security_and_workflow.sql 2>&1 | tee /tmp/haqq-db-tests.log | grep -E 'PASS|FAIL|ERROR|ALL TESTS' || true
+for t in supabase/tests/[1-9]*.sql; do "${PSQL[@]}" -d "$DB" -f "$t"; done 2>&1 | tee /tmp/haqq-db-tests.log | grep -E 'PASS|FAIL|ERROR|ALL TESTS' || true
 grep -q 'ALL TESTS PASSED' /tmp/haqq-db-tests.log || { echo "DB TESTS FAILED"; exit 1; }
 echo "passed checks: $(grep -c 'PASS:' /tmp/haqq-db-tests.log)"

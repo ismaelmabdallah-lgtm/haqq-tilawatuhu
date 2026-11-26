@@ -12,19 +12,22 @@ export function useAdmin(): AdminCtx {
   return v;
 }
 
-const NAV: { href: string; label: string; show: (r: PlatformRole[]) => boolean }[] = [
-  { href: "/admin/", label: "الرئيسية", show: can.team },
-  { href: "/admin/content/?entity=lessons", label: "الدروس", show: can.contentStaff },
-  { href: "/admin/content/?entity=resources", label: "الملفات", show: can.contentStaff },
-  { href: "/admin/content/?entity=quranic_examples", label: "الأمثلة القرآنية", show: can.contentStaff },
-  { href: "/admin/content/?entity=tajweed_topics", label: "الموسوعة", show: can.contentStaff },
-  { href: "/admin/academy/", label: "الأكاديمية", show: can.contentStaff },
-  { href: "/admin/questions/", label: "بنك الأسئلة", show: can.contentStaff },
-  { href: "/admin/exams/", label: "الاختبارات", show: can.exams },
-  { href: "/admin/review/", label: "المراجعة العلمية", show: can.review },
-  { href: "/admin/grading/", label: "التصحيح", show: can.grade },
-  { href: "/admin/content/?entity=announcements", label: "الإعلانات", show: can.announcements },
-  { href: "/admin/team/", label: "الفريق", show: can.superAdmin },
+/**
+ * Five sections for a solo admin. Hidden for v1 but still reachable by URL:
+ * /admin/review/ (team peer review) and /admin/grading/ (manual grading).
+ */
+const NAV: { href: string; label: string; match: (path: string, search: string) => boolean; show: (r: PlatformRole[]) => boolean }[] = [
+  { href: "/admin/content/?entity=resources", label: "الملفات والملخصات", show: can.contentStaff,
+    match: (p, q) => p.startsWith("/admin/content") && q.includes("entity=resources") },
+  { href: "/admin/content/?entity=lessons", label: "الدروس", show: can.contentStaff,
+    match: (p, q) => p.startsWith("/admin/content") && /entity=(lessons|quranic_examples)/.test(q) },
+  { href: "/admin/questions/", label: "بنك الأسئلة والاختبارات", show: can.contentStaff,
+    match: (p) => p.startsWith("/admin/questions") || p.startsWith("/admin/exams") },
+  { href: "/admin/content/?entity=announcements", label: "الإعلانات", show: can.announcements,
+    match: (p, q) => p.startsWith("/admin/content") && q.includes("entity=announcements") },
+  { href: "/admin/academy/", label: "الأكاديمية والفريق", show: can.team,
+    match: (p, q) => p.startsWith("/admin/academy") || p.startsWith("/admin/team") || p.startsWith("/admin/review")
+      || (p.startsWith("/admin/content") && /entity=(tajweed_topics|articulation_points|letter_characteristics|academy_letters)/.test(q)) },
 ];
 
 /**
@@ -64,12 +67,11 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           <p className="mb-1 text-xs text-muted">{session.user.email}</p>
           <p className="mb-3 flex flex-wrap gap-1">{roles.map((r) => <span key={r} className="rounded bg-gold-100 px-2 text-xs text-gold-700">{ROLE_LABELS[r]}</span>)}</p>
           <nav aria-label="لوحة الفريق" className="flex gap-1 overflow-x-auto pb-2 lg:flex-col lg:overflow-visible">
-            {NAV.filter((n) => n.show(roles)).map((n) => {
-              const active = n.href === "/admin/" ? pathname === "/admin/" : pathname.startsWith(n.href.split("?")[0]!) && (n.href.includes("?") ? search.includes(n.href.split("?")[1]!) : true);
-              return (
-                <Link key={n.href} href={n.href} className={`tap flex shrink-0 items-center rounded-md px-3 text-sm ${active ? "bg-brand-700 text-white" : "hover:bg-brand-50"}`}>{n.label}</Link>
-              );
-            })}
+            <Link href="/admin/" className={`tap flex shrink-0 items-center rounded-xl px-3 text-sm ${pathname === "/admin/" ? "bg-brand-700 text-white" : "hover:bg-brand-50"}`}>الرئيسية</Link>
+            {NAV.filter((n) => n.show(roles)).map((n) => (
+              <Link key={n.href} href={n.href} aria-current={n.match(pathname, search) ? "page" : undefined}
+                className={`tap flex shrink-0 items-center rounded-xl px-3 text-sm font-medium ${n.match(pathname, search) ? "bg-brand-700 text-white" : "hover:bg-brand-50"}`}>{n.label}</Link>
+            ))}
           </nav>
         </aside>
         <div className="min-w-0">{children}</div>

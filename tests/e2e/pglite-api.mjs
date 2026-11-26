@@ -1,13 +1,13 @@
 /**
- * TEST-ONLY stand-in for the Supabase REST API, backed by PGlite running the
- * REAL schema (shim → migrations → curriculum seed → scripts/test_seed.sql).
- * Playwright routes the browser's /rest/v1/* calls here, so the UI is tested
- * against the actual SQL functions, grading and RLS — as the `anon` role or as
- * a signed-in test user — without touching the live database.
+ * TEST-ONLY stand-in for the Supabase APIs the app uses, backed by PGlite
+ * running the REAL schema (shim → migrations → curriculum seed → test seed →
+ * e2e content). Every request runs as PostgREST would: as `anon`, or as
+ * `authenticated` with the token's `sub` (signatures are NOT verified — test
+ * only), so RLS, storage policies and SQL functions decide everything.
  *
- * Supports exactly what the app uses: POST /rest/v1/rpc/<fn> with named args,
- * and GET/POST/PATCH/DELETE /rest/v1/<table> with eq/neq/in/is filters, select,
- * order and limit.
+ * Covers: REST (/rest/v1 tables + rpc), Storage (/storage/v1 upload, sign,
+ * signed download, delete — enforced by storage.objects RLS) and the few Auth
+ * calls the app makes.
  */
 import { PGlite } from "@electric-sql/pglite";
 import { pgcrypto } from "@electric-sql/pglite/contrib/pgcrypto";
@@ -29,11 +29,9 @@ export async function createApi({ extraSql = [] } = {}) {
   await db.exec(read("scripts/test_seed.sql"));
   for (const sql of extraSql) await db.exec(sql);
 
-  // PGlite has one connection: serialize requests.
   let chain = Promise.resolve();
   const serial = (fn) => { const p = chain.then(fn, fn); chain = p.catch(() => {}); return p; };
 
-  /** Runs `fn` as the API caller (anon, or authenticated with a user id), like PostgREST. */
   async function asCaller(userId, ip, fn) {
     return db.transaction(async (tx) => {
       const claims = userId ? { sub: userId, role: "authenticated" } : { role: "anon" };
@@ -43,15 +41,11 @@ export async function createApi({ extraSql = [] } = {}) {
       return fn(tx);
     });
   }
-
-  function pgError(e) {
-    return { status: e.code === "42501" ? 403 : e.code === "P0002" ? 404 : 400,
-      body: { code: e.code ?? "XX000", message: e.message, details: null, hint: null } };
-  }
+  const pgError = (e) => ({ status: e.code === "42501" ? 403 : e.code === "P0002" ? 404 : 400,
+    body: { code: e.code ?? "XX000", message: e.message, details: null, hint: null } });
 
   async function rpc(fn, args, userId, ip) {
     if (!IDENT.test(fn)) return { status: 404, body: { message: "unknown function" } };
-    // Argument types decide the wire format: json/jsonb → JSON text, arrays → array literal.
     const meta = await db.query(`select proretset, coalesce(proargnames, '{}') as names,
         array(select format_type(t, null) from unnest(proargtypes) t) as types
       from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and proname = $1 limit 1`, [fn]);
@@ -65,7 +59,6 @@ export async function createApi({ extraSql = [] } = {}) {
       return typeof v === "object" ? JSON.stringify(v) : String(v);
     });
     const named = entries.map(([k], i) => { if (!IDENT.test(k)) throw new Error("bad arg"); return `${k} => $${i + 1}`; }).join(", ");
-    // Set-returning functions come back as rows, scalar ones as a single value (like PostgREST).
     try {
       return await asCaller(userId, ip, async (tx) => {
         if (meta.rows[0].proretset) return { status: 200, body: (await tx.query(`select * from public.${fn}(${named})`, params)).rows };
@@ -90,6 +83,7 @@ export async function createApi({ extraSql = [] } = {}) {
     }
     return clauses.length ? ` where ${clauses.join(" and ")}` : "";
   }
+  const toParam = (v) => (v !== null && typeof v === "object" && !Array.isArray(v) ? JSON.stringify(v) : v);
 
   async function table(method, name, url, bodyText, userId, ip) {
     if (!IDENT.test(name)) return { status: 404, body: { message: "unknown table" } };
@@ -98,7 +92,7 @@ export async function createApi({ extraSql = [] } = {}) {
         const params = [];
         const sel = url.searchParams.get("select") ?? "*";
         const cols = sel === "*" ? "*" : sel.split(",").map((c) => { if (!IDENT.test(c.trim())) throw new Error(`bad select ${c}`); return c.trim(); }).join(", ");
-        if (method === "GET") {
+        if (method === "GET" || method === "HEAD") {
           let sql = `select ${cols} from public.${name}${where(url, params)}`;
           const order = url.searchParams.getAll("order").flatMap((o) => o.split(","));
           if (order.length) sql += " order by " + order.map((o) => { const [c, dir] = o.split("."); if (!IDENT.test(c)) throw new Error("bad order"); return `${c} ${dir === "desc" ? "desc" : "asc"}`; }).join(", ");
@@ -106,12 +100,10 @@ export async function createApi({ extraSql = [] } = {}) {
           return { status: 200, body: (await tx.query(sql, params)).rows };
         }
         if (method === "POST") {
-          const rows = [JSON.parse(bodyText || "[]")].flat();
           const out = [];
-          for (const row of rows) {
+          for (const row of [JSON.parse(bodyText || "[]")].flat()) {
             const keys = Object.keys(row).filter((k) => IDENT.test(k));
-            const vals = keys.map((k) => (row[k] !== null && typeof row[k] === "object" && !Array.isArray(row[k]) ? JSON.stringify(row[k]) : row[k]));
-            const r = await tx.query(`insert into public.${name} (${keys.join(", ")}) values (${keys.map((_, i) => `$${i + 1}`).join(", ")}) returning *`, vals);
+            const r = await tx.query(`insert into public.${name} (${keys.join(", ")}) values (${keys.map((_, i) => `$${i + 1}`).join(", ")}) returning *`, keys.map((k) => toParam(row[k])));
             out.push(...r.rows);
           }
           return { status: 201, body: out };
@@ -119,9 +111,8 @@ export async function createApi({ extraSql = [] } = {}) {
         if (method === "PATCH") {
           const row = JSON.parse(bodyText || "{}");
           const keys = Object.keys(row).filter((k) => IDENT.test(k));
-          keys.forEach((k) => params.push(row[k] !== null && typeof row[k] === "object" && !Array.isArray(row[k]) ? JSON.stringify(row[k]) : row[k]));
-          const sets = keys.map((k, i) => `${k} = $${i + 1}`).join(", ");
-          return { status: 200, body: (await tx.query(`update public.${name} set ${sets}${where(url, params)} returning *`, params)).rows };
+          keys.forEach((k) => params.push(toParam(row[k])));
+          return { status: 200, body: (await tx.query(`update public.${name} set ${keys.map((k, i) => `${k} = $${i + 1}`).join(", ")}${where(url, params)} returning *`, params)).rows };
         }
         if (method === "DELETE") return { status: 200, body: (await tx.query(`delete from public.${name}${where(url, params)} returning *`, params)).rows };
         return { status: 405, body: { message: "method" } };
@@ -129,38 +120,81 @@ export async function createApi({ extraSql = [] } = {}) {
     } catch (e) { return pgError(e); }
   }
 
-  /**
-   * Playwright route handler. The caller is taken from the bearer token's
-   * claims exactly as PostgREST would (signatures are NOT verified — test only):
-   * role "authenticated" + sub → that user; anything else → anon.
-   */
-  async function handle(route, ip = "203.0.113.50") {
-    const req = route.request();
+  // ---------------------------------------------------------------- storage (RLS on storage.objects decides)
+  const storageError = (status, message) => ({ status, body: { statusCode: String(status), error: message, message } });
+  async function storage(method, path, url, bodyText, userId, ip, contentType, rawBody) {
+    let m;
+    if (method === "POST" && (m = /^object\/sign\/([^/]+)\/(.+)$/.exec(path))) {
+      const [, bucket, name] = m;
+      const found = await asCaller(userId, ip, (tx) => tx.query("select 1 from storage.objects where bucket_id = $1 and name = $2", [bucket, decodeURIComponent(name)]));
+      if (!found.rows.length) return storageError(400, "Object not found");
+      return { status: 200, body: { signedURL: `/object/sign/${bucket}/${name}?token=test-signed` } };
+    }
+    if (method === "GET" && (m = /^object\/sign\/([^/]+)\/(.+)$/.exec(path))) {
+      const ext = path.split(".").pop();
+      const type = { pdf: "application/pdf", png: "image/png", jpg: "image/jpeg", mp3: "audio/mpeg" }[ext] ?? "application/octet-stream";
+      const png = Buffer.from("89504e470d0a1a0a0000000d4948445200000001000000010806000000" + "1f15c4890000000d49444154789c6360000000000200015e2c9e0b0000000049454e44ae426082", "hex");
+      return { status: 200, raw: type === "image/png" ? png : Buffer.from("test file"), headers: { "content-type": type } };
+    }
+    if (method === "POST" && (m = /^object\/([^/]+)\/(.+)$/.exec(path)) && !path.startsWith("object/sign/")) {
+      const [, bucket, name] = m;
+      const b = (await db.query("select file_size_limit, allowed_mime_types from storage.buckets where id = $1", [bucket])).rows[0];
+      if (!b) return storageError(404, "Bucket not found");
+      // supabase-js sends browser File/Blob uploads as multipart/form-data (the file is the part with a type).
+      let size = rawBody?.length ?? 0;
+      let mime = (contentType ?? "").split(";")[0];
+      if (mime === "multipart/form-data") {
+        const form = await new Response(rawBody, { headers: { "content-type": contentType } }).formData();
+        const file = [...form.values()].find((v) => typeof v !== "string");
+        if (!file) return storageError(400, "no file in upload");
+        size = file.size; mime = file.type;
+      }
+      if (b.file_size_limit && size > Number(b.file_size_limit)) return storageError(413, "The object exceeded the maximum allowed size");
+      if (b.allowed_mime_types && !b.allowed_mime_types.includes(mime)) return storageError(415, `mime type ${mime} is not supported`);
+      try {
+        await asCaller(userId, ip, (tx) => tx.query("insert into storage.objects (bucket_id, name, owner) values ($1, $2, $3)", [bucket, decodeURIComponent(name), userId]));
+      } catch (e) { return storageError(403, `new row violates row-level security policy: ${e.message}`); }
+      return { status: 200, body: { Key: `${bucket}/${name}`, Id: name } };
+    }
+    if (method === "DELETE" && (m = /^object\/([^/]+)$/.exec(path))) {
+      const prefixes = JSON.parse(bodyText || "{}").prefixes ?? [];
+      const r = await asCaller(userId, ip, (tx) => tx.query("delete from storage.objects where bucket_id = $1 and name = any($2::text[]) returning name", [m[1], `{${prefixes.join(",")}}`]));
+      return { status: 200, body: r.rows };
+    }
+    return storageError(404, `unsupported storage call ${method} ${path}`);
+  }
+
+  /** Transport-neutral entry point: { method, url, headers, body (string), raw (Buffer) } → { status, body | raw, headers } */
+  async function respond({ method, url, headers, body, raw, ip = "203.0.113.50" }) {
+    const u = new URL(url);
     let userId = null;
-    const bearer = (req.headers()["authorization"] ?? "").replace(/^Bearer /, "");
+    const bearer = (headers["authorization"] ?? "").replace(/^Bearer /, "");
     try {
       const claims = JSON.parse(Buffer.from(bearer.split(".")[1] ?? "", "base64url").toString("utf8"));
       if (claims.role === "authenticated" && typeof claims.sub === "string") userId = claims.sub;
     } catch { /* anon */ }
-    const url = new URL(req.url());
-    const path = url.pathname.replace(/^\/rest\/v1\//, "");
-    const res = await serial(() => path.startsWith("rpc/")
-      ? rpc(path.slice(4), req.postData() ? JSON.parse(req.postData()) : {}, userId, ip)
-      : table(req.method(), path, url, req.postData(), userId, ip));
-    const wantsObject = (req.headers()["accept"] ?? "").includes("vnd.pgrst.object");
-    let body = res.body;
-    if (wantsObject && Array.isArray(body) && res.status < 300) {
-      if (body.length !== 1) return route.fulfill({ status: 406, contentType: "application/json", body: JSON.stringify({ code: "PGRST116", message: "JSON object requested, multiple (or no) rows returned", details: `${body.length} rows`, hint: null }) });
-      body = body[0];
+    if (u.pathname.startsWith("/auth/v1/")) return { status: u.pathname.endsWith("/logout") ? 204 : 200, body: {} };
+    if (u.pathname.startsWith("/storage/v1/")) {
+      return serial(() => storage(method, u.pathname.replace("/storage/v1/", ""), u, body, userId, ip, headers["content-type"], raw));
     }
-    await route.fulfill({ status: res.status, contentType: "application/json", headers: { "access-control-allow-origin": "*" }, body: JSON.stringify(body) });
+    const path = u.pathname.replace(/^\/rest\/v1\//, "");
+    const res = await serial(() => path.startsWith("rpc/")
+      ? rpc(path.slice(4), body ? JSON.parse(body) : {}, userId, ip)
+      : table(method, path, u, body, userId, ip));
+    if ((headers["accept"] ?? "").includes("vnd.pgrst.object") && Array.isArray(res.body) && res.status < 300) {
+      if (res.body.length !== 1) return { status: 406, body: { code: "PGRST116", message: "JSON object requested, multiple (or no) rows returned", details: `${res.body.length} rows`, hint: null } };
+      return { ...res, body: res.body[0] };
+    }
+    return res;
   }
 
   /** Direct SQL as the database owner, with request settings defined like PostgREST does. */
   const query = (sql, p) => serial(() => db.transaction(async (tx) => {
     await tx.query("select set_config('request.jwt.claims', '{}', true), set_config('request.headers', '{}', true)");
-    return tx.query(sql, p);
+    if (p && p.length) return tx.query(sql, p);
+    const results = await tx.exec(sql);          // multi-statement scripts (no parameters)
+    return results[results.length - 1] ?? { rows: [] };
   }));
 
-  return { db, handle, query, close: () => db.close() };
+  return { db, respond, query, close: () => db.close() };
 }
