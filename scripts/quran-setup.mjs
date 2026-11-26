@@ -31,7 +31,7 @@ const SOURCES = {
   meta: {
     file: "quran-data.xml",
     url: "https://tanzil.net/res/text/metadata/quran-data.xml",
-    sha256: "8867c1d88191472adec9db694b3cd9f135b1a2ef580574d32cf888dcb22c5c7a",
+    sha256: "423afa57b81ccee79a4f15a2df1b8aa6a6c06498cfe8ce12e627adc41512c4a9",
   },
 };
 const TOTAL_AYAT = 6236;
