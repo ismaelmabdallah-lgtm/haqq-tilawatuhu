@@ -1,0 +1,19 @@
+# Cloudflare Pages project configuration (static export in ./out + ./functions).
+name = "haqq-tilawatuhu"
+pages_build_output_dir = "out"
+compatibility_date = "2026-11-01"
+
+[vars]
+# Public values (same as NEXT_PUBLIC_*). Set them here or in the Pages dashboard.
+SUPABASE_URL = ""
+SUPABASE_ANON_KEY = ""
+FILES_PUBLIC_BASE_URL = ""
+
+# R2 uploads: uncomment after creating the bucket (`wrangler r2 bucket create haqq-files`).
+# Without this binding /api/upload reports enabled=false and the admin UI hides
+# direct uploads (YouTube and external links keep working).
+# [[r2_buckets]]
+# binding = "FILES"
+# bucket_name = "haqq-files"
+
+# Secret (never commit): wrangler pages secret put PAGES_DEPLOY_HOOK_URL

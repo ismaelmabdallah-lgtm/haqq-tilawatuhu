@@ -1,0 +1,602 @@
+{
+ "edition": {
+  "id": "00000000-0000-4000-8000-000000000003",
+  "curriculum_id": "00000000-0000-4000-8000-000000000002",
+  "slug": "test-edition",
+  "label": "الطبعة التجريبية",
+  "year_ce": 2026,
+  "year_ah": 1448,
+  "riwayah_id": "00000000-0000-4000-8000-000000000001",
+  "publisher": null,
+  "authors": [
+   "مؤلف تجريبي"
+  ],
+  "source_document": {},
+  "is_published": true,
+  "is_current": true,
+  "created_at": "2026-11-26T00:00:00.000Z",
+  "curriculum": {
+   "id": "00000000-0000-4000-8000-000000000002",
+   "slug": "test-curriculum",
+   "title": "[بيانات تجريبية] منهج تجريبي",
+   "description": null,
+   "language": "ar",
+   "country_code": "JO",
+   "is_published": true,
+   "affiliation_note": "منهج تجريبي لأغراض الاختبار فقط.",
+   "created_by": null,
+   "created_at": "2026-11-26T00:00:00.000Z",
+   "updated_at": "2026-11-26T00:00:00.000Z"
+  },
+  "riwayah": {
+   "id": "00000000-0000-4000-8000-000000000001",
+   "code": "hafs-asim-shatibiyyah",
+   "name_ar": "حفص عن عاصم",
+   "name_en": "Hafs an Asim",
+   "tariq": "الشاطبية"
+  }
+ },
+ "riwayat": [
+  {
+   "id": "00000000-0000-4000-8000-000000000001",
+   "code": "hafs-asim-shatibiyyah",
+   "name_ar": "حفص عن عاصم",
+   "name_en": "Hafs an Asim",
+   "tariq": "الشاطبية"
+  }
+ ],
+ "levels": [
+  {
+   "id": "00000000-0000-4000-8000-000000000010",
+   "edition_id": "00000000-0000-4000-8000-000000000003",
+   "code": "l1",
+   "sort_order": 1,
+   "title": "المستوى الأول",
+   "subtitle": "التأسيسي",
+   "description": "[بيانات تجريبية] وصف المستوى الأول",
+   "source_page_start": 9,
+   "source_page_end": 76
+  },
+  {
+   "id": "00000000-0000-4000-8000-000000000011",
+   "edition_id": "00000000-0000-4000-8000-000000000003",
+   "code": "l2",
+   "sort_order": 2,
+   "title": "المستوى الثاني",
+   "subtitle": "التكميلي",
+   "description": null,
+   "source_page_start": 77,
+   "source_page_end": 164
+  }
+ ],
+ "chapters": [
+  {
+   "id": "00000000-0000-4000-8000-000000000020",
+   "level_id": "00000000-0000-4000-8000-000000000010",
+   "code": "l1-c2",
+   "sort_order": 2,
+   "label": "الباب الثاني",
+   "title": "أحكام النون الساكنة والتنوين",
+   "source_page_start": 47,
+   "source_page_end": 65,
+   "review_note": null
+  },
+  {
+   "id": "00000000-0000-4000-8000-000000000021",
+   "level_id": "00000000-0000-4000-8000-000000000011",
+   "code": "l2-c1",
+   "sort_order": 1,
+   "label": "الباب الأول",
+   "title": "المد أحكامه وأنواعه",
+   "source_page_start": 79,
+   "source_page_end": 104,
+   "review_note": null
+  }
+ ],
+ "lessons": [
+  {
+   "id": "00000000-0000-4000-8000-000000000030",
+   "chapter_id": "00000000-0000-4000-8000-000000000020",
+   "parent_lesson_id": null,
+   "code": "l1-c2-01",
+   "sort_order": 1,
+   "title": "أحكام النون الساكنة والتنوين",
+   "description": "[بيانات تجريبية] مقدمة في أحكام النون الساكنة والتنوين.",
+   "objectives": [
+    "أن يعرّف الطالب النون الساكنة والتنوين",
+    "أن يميّز الأحكام الأربعة"
+   ],
+   "body_md": "[بيانات تجريبية] للنون الساكنة والتنوين أربعة أحكام: **الإظهار**، والإدغام، والإقلاب، والإخفاء.\n\nمثال من القرآن:\n\n[[quran:2:121:1-6]]\n\n- الإظهار الحلقي\n- الإدغام",
+   "definitions": [
+    {
+     "term": "النون الساكنة",
+     "definition": "[بيانات تجريبية] نون خالية من الحركة.",
+     "source_page": 49
+    }
+   ],
+   "rules": [
+    {
+     "title": "الإظهار الحلقي",
+     "body": "[بيانات تجريبية] إذا وقع بعدها حرف من حروف الحلق.",
+     "source_page": 51
+    }
+   ],
+   "tables": [
+    {
+     "caption": "حروف الإظهار",
+     "columns": [
+      "الحرف",
+      "المخرج"
+     ],
+     "rows": [
+      [
+       "ء",
+       "أقصى الحلق"
+      ],
+      [
+       "هـ",
+       "أقصى الحلق"
+      ]
+     ],
+     "source_page": 52
+    }
+   ],
+   "youtube_ids": [
+    "dQw4w9WgXcQ"
+   ],
+   "origin": "curriculum_quoted",
+   "source_edition_id": "00000000-0000-4000-8000-000000000003",
+   "source_page_start": 49,
+   "source_page_end": 65,
+   "search_norm": "",
+   "status": "published",
+   "scientifically_verified": true,
+   "created_by": null,
+   "created_at": "2026-11-26T00:00:00.000Z",
+   "updated_at": "2026-11-26T00:00:00.000Z"
+  },
+  {
+   "id": "00000000-0000-4000-8000-000000000031",
+   "chapter_id": "00000000-0000-4000-8000-000000000020",
+   "parent_lesson_id": "00000000-0000-4000-8000-000000000030",
+   "code": "l1-c2-02",
+   "sort_order": 2,
+   "title": "الإظهار الحلقي",
+   "description": null,
+   "objectives": [],
+   "body_md": null,
+   "definitions": [],
+   "rules": [],
+   "tables": [],
+   "youtube_ids": [],
+   "origin": "curriculum_quoted",
+   "source_edition_id": "00000000-0000-4000-8000-000000000003",
+   "source_page_start": 51,
+   "source_page_end": 53,
+   "search_norm": "",
+   "status": "published",
+   "scientifically_verified": true,
+   "created_by": null,
+   "created_at": "2026-11-26T00:00:00.000Z",
+   "updated_at": "2026-11-26T00:00:00.000Z"
+  },
+  {
+   "id": "00000000-0000-4000-8000-000000000032",
+   "chapter_id": "00000000-0000-4000-8000-000000000020",
+   "parent_lesson_id": null,
+   "code": "l1-c2-03",
+   "sort_order": 3,
+   "title": "درس مسودة لا يجوز أن يظهر",
+   "description": null,
+   "objectives": [],
+   "body_md": null,
+   "definitions": [],
+   "rules": [],
+   "tables": [],
+   "youtube_ids": [],
+   "origin": "curriculum_quoted",
+   "source_edition_id": "00000000-0000-4000-8000-000000000003",
+   "source_page_start": 49,
+   "source_page_end": 65,
+   "search_norm": "",
+   "status": "draft",
+   "scientifically_verified": false,
+   "created_by": null,
+   "created_at": "2026-11-26T00:00:00.000Z",
+   "updated_at": "2026-11-26T00:00:00.000Z"
+  },
+  {
+   "id": "00000000-0000-4000-8000-000000000033",
+   "chapter_id": "00000000-0000-4000-8000-000000000021",
+   "parent_lesson_id": null,
+   "code": "l2-c1-01",
+   "sort_order": 1,
+   "title": "المد الأصلي",
+   "description": null,
+   "objectives": [],
+   "body_md": null,
+   "definitions": [],
+   "rules": [],
+   "tables": [],
+   "youtube_ids": [],
+   "origin": "curriculum_quoted",
+   "source_edition_id": "00000000-0000-4000-8000-000000000003",
+   "source_page_start": 81,
+   "source_page_end": 86,
+   "search_norm": "",
+   "status": "published",
+   "scientifically_verified": true,
+   "created_by": null,
+   "created_at": "2026-11-26T00:00:00.000Z",
+   "updated_at": "2026-11-26T00:00:00.000Z"
+  }
+ ],
+ "examples": [
+  {
+   "id": "00000000-0000-4000-8000-000000000040",
+   "riwayah_id": "00000000-0000-4000-8000-000000000001",
+   "surah": 1,
+   "ayah_start": 2,
+   "ayah_end": 4,
+   "word_start": null,
+   "word_end": null,
+   "display_text": null,
+   "text_source": null,
+   "note": "مثال تجريبي",
+   "origin": "curriculum_quoted",
+   "source_edition_id": "00000000-0000-4000-8000-000000000003",
+   "source_page_start": 52,
+   "source_page_end": null,
+   "status": "published",
+   "scientifically_verified": true,
+   "created_by": null,
+   "created_at": "2026-11-26T00:00:00.000Z",
+   "updated_at": "2026-11-26T00:00:00.000Z"
+  },
+  {
+   "id": "00000000-0000-4000-8000-000000000041",
+   "riwayah_id": "00000000-0000-4000-8000-000000000001",
+   "surah": 112,
+   "ayah_start": 1,
+   "ayah_end": 1,
+   "word_start": null,
+   "word_end": null,
+   "display_text": null,
+   "text_source": null,
+   "note": null,
+   "origin": "curriculum_quoted",
+   "source_edition_id": "00000000-0000-4000-8000-000000000003",
+   "source_page_start": 53,
+   "source_page_end": null,
+   "status": "draft",
+   "scientifically_verified": false,
+   "created_by": null,
+   "created_at": "2026-11-26T00:00:00.000Z",
+   "updated_at": "2026-11-26T00:00:00.000Z"
+  }
+ ],
+ "lessonExamples": [
+  {
+   "lesson_id": "00000000-0000-4000-8000-000000000030",
+   "example_id": "00000000-0000-4000-8000-000000000040",
+   "sort_order": 1,
+   "rule_note": "إظهار"
+  },
+  {
+   "lesson_id": "00000000-0000-4000-8000-000000000030",
+   "example_id": "00000000-0000-4000-8000-000000000041",
+   "sort_order": 2,
+   "rule_note": null
+  }
+ ],
+ "resources": [
+  {
+   "id": "00000000-0000-4000-8000-000000000050",
+   "kind": "pdf",
+   "title": "[بيانات تجريبية] ملخص أحكام النون",
+   "description": "ملف PDF تجريبي",
+   "provider": "r2",
+   "object_key": "resources/2026/11/test.pdf",
+   "youtube_id": null,
+   "external_url": null,
+   "mime_type": "application/pdf",
+   "size_bytes": 524288,
+   "duration_seconds": null,
+   "reciter_name": null,
+   "is_downloadable": true,
+   "origin": "independent_material",
+   "source_edition_id": null,
+   "source_page_start": null,
+   "status": "published",
+   "scientifically_verified": true,
+   "created_by": null,
+   "created_at": "2026-11-26T00:00:00.000Z",
+   "updated_at": "2026-11-26T00:00:00.000Z"
+  },
+  {
+   "id": "00000000-0000-4000-8000-000000000051",
+   "kind": "link",
+   "title": "[بيانات تجريبية] رابط خارجي",
+   "description": null,
+   "provider": "external",
+   "object_key": null,
+   "youtube_id": null,
+   "external_url": "https://tanzil.net",
+   "mime_type": null,
+   "size_bytes": null,
+   "duration_seconds": null,
+   "reciter_name": null,
+   "is_downloadable": false,
+   "origin": "independent_material",
+   "source_edition_id": null,
+   "source_page_start": null,
+   "status": "published",
+   "scientifically_verified": true,
+   "created_by": null,
+   "created_at": "2026-11-26T00:00:00.000Z",
+   "updated_at": "2026-11-26T00:00:00.000Z"
+  },
+  {
+   "id": "00000000-0000-4000-8000-000000000052",
+   "kind": "video",
+   "title": "[بيانات تجريبية] مقطع مرئي",
+   "description": null,
+   "provider": "youtube",
+   "object_key": null,
+   "youtube_id": "dQw4w9WgXcQ",
+   "external_url": null,
+   "mime_type": null,
+   "size_bytes": null,
+   "duration_seconds": 120,
+   "reciter_name": null,
+   "is_downloadable": false,
+   "origin": "independent_material",
+   "source_edition_id": null,
+   "source_page_start": null,
+   "status": "published",
+   "scientifically_verified": true,
+   "created_by": null,
+   "created_at": "2026-11-26T00:00:00.000Z",
+   "updated_at": "2026-11-26T00:00:00.000Z"
+  },
+  {
+   "id": "00000000-0000-4000-8000-000000000053",
+   "kind": "pdf",
+   "title": "مورد مسودة لا يجوز أن يظهر",
+   "description": null,
+   "provider": "external",
+   "object_key": null,
+   "youtube_id": null,
+   "external_url": "https://example.org/x.pdf",
+   "mime_type": null,
+   "size_bytes": null,
+   "duration_seconds": null,
+   "reciter_name": null,
+   "is_downloadable": true,
+   "origin": "independent_material",
+   "source_edition_id": null,
+   "source_page_start": null,
+   "status": "draft",
+   "scientifically_verified": false,
+   "created_by": null,
+   "created_at": "2026-11-26T00:00:00.000Z",
+   "updated_at": "2026-11-26T00:00:00.000Z"
+  }
+ ],
+ "lessonResources": [
+  {
+   "lesson_id": "00000000-0000-4000-8000-000000000030",
+   "resource_id": "00000000-0000-4000-8000-000000000050",
+   "sort_order": 1
+  },
+  {
+   "lesson_id": "00000000-0000-4000-8000-000000000030",
+   "resource_id": "00000000-0000-4000-8000-000000000053",
+   "sort_order": 2
+  }
+ ],
+ "lessonRelations": [
+  {
+   "lesson_id": "00000000-0000-4000-8000-000000000030",
+   "related_lesson_id": "00000000-0000-4000-8000-000000000033"
+  }
+ ],
+ "topics": [
+  {
+   "id": "00000000-0000-4000-8000-000000000060",
+   "slug": "izhar-halqi",
+   "title": "الإظهار الحلقي",
+   "definition": "[بيانات تجريبية] إخراج الحرف من مخرجه من غير غنة.",
+   "explanation_md": "[بيانات تجريبية] شرح موجز.\n\n[[quran:1:1]]",
+   "rules": [],
+   "riwayah_id": "00000000-0000-4000-8000-000000000001",
+   "origin": "supplementary_explanation",
+   "source_edition_id": "00000000-0000-4000-8000-000000000003",
+   "source_page_start": 51,
+   "source_page_end": 53,
+   "search_norm": "",
+   "status": "published",
+   "scientifically_verified": true,
+   "created_by": null,
+   "created_at": "2026-11-26T00:00:00.000Z",
+   "updated_at": "2026-11-26T00:00:00.000Z"
+  }
+ ],
+ "topicLessons": [
+  {
+   "topic_id": "00000000-0000-4000-8000-000000000060",
+   "lesson_id": "00000000-0000-4000-8000-000000000030"
+  }
+ ],
+ "points": [
+  {
+   "id": "00000000-0000-4000-8000-000000000070",
+   "code": "halq-aqsa",
+   "general_area": "الحلق",
+   "name": "أقصى الحلق",
+   "sort_order": 1,
+   "description_md": "[بيانات تجريبية] أبعد الحلق مما يلي الصدر.",
+   "diagram_resource_id": null,
+   "origin": "curriculum_quoted",
+   "source_edition_id": "00000000-0000-4000-8000-000000000003",
+   "source_page_start": 115,
+   "status": "published",
+   "scientifically_verified": true,
+   "created_by": null,
+   "created_at": "2026-11-26T00:00:00.000Z",
+   "updated_at": "2026-11-26T00:00:00.000Z"
+  }
+ ],
+ "characteristics": [
+  {
+   "id": "00000000-0000-4000-8000-000000000080",
+   "code": "jahr",
+   "name": "الجهر",
+   "has_opposite": true,
+   "opposite_id": "00000000-0000-4000-8000-000000000081",
+   "description_md": "[بيانات تجريبية] انحباس جريان النفس.",
+   "origin": "curriculum_quoted",
+   "source_edition_id": "00000000-0000-4000-8000-000000000003",
+   "source_page_start": 131,
+   "status": "published",
+   "scientifically_verified": true,
+   "created_by": null,
+   "created_at": "2026-11-26T00:00:00.000Z",
+   "updated_at": "2026-11-26T00:00:00.000Z"
+  },
+  {
+   "id": "00000000-0000-4000-8000-000000000081",
+   "code": "hams",
+   "name": "الهمس",
+   "has_opposite": true,
+   "opposite_id": "00000000-0000-4000-8000-000000000080",
+   "description_md": null,
+   "origin": "curriculum_quoted",
+   "source_edition_id": "00000000-0000-4000-8000-000000000003",
+   "source_page_start": 131,
+   "status": "published",
+   "scientifically_verified": true,
+   "created_by": null,
+   "created_at": "2026-11-26T00:00:00.000Z",
+   "updated_at": "2026-11-26T00:00:00.000Z"
+  },
+  {
+   "id": "00000000-0000-4000-8000-000000000082",
+   "code": "safeer",
+   "name": "الصفير",
+   "has_opposite": false,
+   "opposite_id": null,
+   "description_md": null,
+   "origin": "curriculum_quoted",
+   "source_edition_id": "00000000-0000-4000-8000-000000000003",
+   "source_page_start": 140,
+   "status": "published",
+   "scientifically_verified": true,
+   "created_by": null,
+   "created_at": "2026-11-26T00:00:00.000Z",
+   "updated_at": "2026-11-26T00:00:00.000Z"
+  }
+ ],
+ "letters": [
+  {
+   "id": "00000000-0000-4000-8000-000000000090",
+   "letter": "ء",
+   "sort_order": 1,
+   "articulation_point_id": "00000000-0000-4000-8000-000000000070",
+   "description_md": "[بيانات تجريبية] الهمزة.",
+   "common_mistakes_md": "[بيانات تجريبية] تسهيلها في غير موضعه.",
+   "audio_resource_id": null,
+   "origin": "curriculum_quoted",
+   "source_edition_id": "00000000-0000-4000-8000-000000000003",
+   "source_page_start": 115,
+   "status": "published",
+   "scientifically_verified": true,
+   "created_by": null,
+   "created_at": "2026-11-26T00:00:00.000Z",
+   "updated_at": "2026-11-26T00:00:00.000Z"
+  },
+  {
+   "id": "00000000-0000-4000-8000-000000000091",
+   "letter": "هـ",
+   "sort_order": 2,
+   "articulation_point_id": "00000000-0000-4000-8000-000000000070",
+   "description_md": null,
+   "common_mistakes_md": null,
+   "audio_resource_id": null,
+   "origin": "curriculum_quoted",
+   "source_edition_id": "00000000-0000-4000-8000-000000000003",
+   "source_page_start": 115,
+   "status": "published",
+   "scientifically_verified": true,
+   "created_by": null,
+   "created_at": "2026-11-26T00:00:00.000Z",
+   "updated_at": "2026-11-26T00:00:00.000Z"
+  }
+ ],
+ "letterCharacteristics": [
+  {
+   "letter_id": "00000000-0000-4000-8000-000000000090",
+   "characteristic_id": "00000000-0000-4000-8000-000000000080"
+  },
+  {
+   "letter_id": "00000000-0000-4000-8000-000000000091",
+   "characteristic_id": "00000000-0000-4000-8000-000000000081"
+  }
+ ],
+ "letterExamples": [
+  {
+   "letter_id": "00000000-0000-4000-8000-000000000090",
+   "example_id": "00000000-0000-4000-8000-000000000040"
+  }
+ ],
+ "announcements": [
+  {
+   "id": "00000000-0000-4000-8000-000000000100",
+   "kind": "text",
+   "title": "[بيانات تجريبية] إعلان مثبّت",
+   "body": "نص الإعلان التجريبي.",
+   "attachment_resource_id": "00000000-0000-4000-8000-000000000051",
+   "link_url": "https://tanzil.net",
+   "target_level_id": null,
+   "publish_at": "2026-11-01T00:00:00Z",
+   "expires_at": null,
+   "pinned": true,
+   "created_by": null,
+   "created_at": "2026-11-26T00:00:00.000Z"
+  },
+  {
+   "id": "00000000-0000-4000-8000-000000000101",
+   "kind": "text",
+   "title": "إعلان منتهي لا يجوز أن يظهر",
+   "body": null,
+   "attachment_resource_id": null,
+   "link_url": null,
+   "target_level_id": null,
+   "publish_at": "2026-01-01T00:00:00Z",
+   "expires_at": "2026-02-01T00:00:00Z",
+   "pinned": false,
+   "created_by": null,
+   "created_at": "2026-11-26T00:00:00.000Z"
+  }
+ ],
+ "exams": [
+  {
+   "id": "00000000-0000-4000-8000-000000000110",
+   "slug": "test-practice",
+   "title": "[بيانات تجريبية] تدريب على أحكام النون",
+   "description": null,
+   "kind": "practice",
+   "level_id": "00000000-0000-4000-8000-000000000010",
+   "chapter_id": "00000000-0000-4000-8000-000000000020",
+   "lesson_id": "00000000-0000-4000-8000-000000000030",
+   "is_level_final": false,
+   "requires_account": false,
+   "time_limit_minutes": 10,
+   "total_marks": 4,
+   "pass_percent": 60,
+   "opens_at": null,
+   "closes_at": null,
+   "has_manual_parts": false
+  }
+ ]
+}

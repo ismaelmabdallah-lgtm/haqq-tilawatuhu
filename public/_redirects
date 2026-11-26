@@ -1,0 +1,8 @@
+# Cloudflare Pages — client-only dynamic routes (see src/lib/shell-route.ts).
+# Status 200 = rewrite: the shell page is served while the browser keeps the real URL.
+/exams/:id/          /exams/_/          200
+/exams/:id           /exams/_/          200
+/attempts/:id/       /attempts/_/       200
+/attempts/:id        /attempts/_/       200
+/certificates/:id/   /certificates/_/   200
+/certificates/:id    /certificates/_/   200
